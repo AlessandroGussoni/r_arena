@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scientific Scatter Plot</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.2em;
+            font-weight: 300;
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+            font-weight: 300;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 500px;
+            margin-bottom: 20px;
+            background: #fafbfc;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            cursor: crosshair;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
+        }
+
+        .btn.secondary:hover {
+            box-shadow: 0 6px 20px rgba(240, 147, 251, 0.4);
+        }
+
+        .stats {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stats h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #667eea;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+
+        .instructions {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>R Arena</h1>
+            <p>Correlation: <span id="correlation">-</span></p>
+        </div>
+        
+
+        <div class="chart-container">
+            <canvas id="scatterChart"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        const initialPoints = 10
+        let initialData = [];
+        let addedData = [];
+        let chart;
+
+        function generateCorrelatedData(n, r) {
+            // Box-Muller transform to generate standard normal random numbers
+            const randn_bm = () => {
+                let u = 0, v = 0;
+                while(u === 0) u = Math.random();
+                while(v === 0) v = Math.random();
+                return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+            }
+
+            const x_norm = Array.from({length: n}, () => randn_bm());
+            const e_norm = Array.from({length: n}, () => randn_bm());
+
+            const y_norm = x_norm.map((val, i) => r * val + Math.sqrt(1 - r*r) * e_norm[i]);
+
+            // Scale to fit in the chart's range [-100, 100] with some margin
+            const scale = (arr) => {
+                const min = Math.min(...arr);
+                const max = Math.max(...arr);
+                const range = max - min;
+                if (range === 0) return arr.map(() => 0);
+                // Scale to [-95, 95]
+                return arr.map(val => ((val - min) / range) * 190 - 95);
+            };
+
+            const scaledX = scale(x_norm);
+            const scaledY = scale(y_norm);
+
+            return scaledX.map((val, i) => ({x: val, y: scaledY[i]}));
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('scatterChart').getContext('2d');
+            
+            chart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Original Points',
+                        data: initialData,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        borderColor: 'rgba(0, 0, 0, 1)',
+                        borderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        pointBackgroundColor: 'rgba(0, 0, 0, 0.9)',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverBorderWidth: 3
+                    }, {
+                        label: 'Added Points',
+                        data: addedData,
+                        backgroundColor: 'rgba(255, 0, 0, 0.8)',
+                        borderColor: 'rgba(255, 0, 0, 1)',
+                        borderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8,
+                        pointBackgroundColor: 'rgba(255, 0, 0, 0.9)',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointHoverBorderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(44, 62, 80, 0.9)',
+                            titleColor: '#ffffff',
+                            bodyColor: '#ffffff',
+                            borderColor: '#667eea',
+                            borderWidth: 1,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `Point: (${context.parsed.x.toFixed(2)}, ${context.parsed.y.toFixed(2)})`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            min: -100,
+                            max: 100,
+                            
+                            ticks: {
+                                color: '#7f8c8d',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(127, 140, 141, 0.2)',
+                                lineWidth: 1
+                            },
+                            border: {
+                                color: '#2c3e50',
+                                width: 2
+                            }
+                        },
+                        y: {
+                            min: -100,
+                            max: 100,
+                            
+                            ticks: {
+                                color: '#7f8c8d',
+                                font: {
+                                    size: 12
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(127, 140, 141, 0.2)',
+                                lineWidth: 1
+                            },
+                            border: {
+                                color: '#2c3e50',
+                                width: 2
+                            }
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        const rect = chart.canvas.getBoundingClientRect();
+                        const x = event.clientX - rect.left;
+                        const y = event.clientY - rect.top;
+                        
+                        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+                        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
+                        const dataY = chart.scales.y.getValueForPixel(canvasPosition.y);
+                        
+                        if (dataX >= -100 && dataX <= 100 && dataY >= -100 && dataY <= 100) {
+                            addPoint(dataX, dataY);
+                        }
+                    },
+                    onHover: (event, elements) => {
+                        chart.canvas.style.cursor = elements.length > 0 ? 'pointer' : 'crosshair';
+                    }
+                }
+            });
+        }
+
+        function addPoint(x, y) {
+            addedData.push({x: x, y: y});
+            chart.update();
+            updateStats();
+        }
+
+        function clearAllPoints() {
+            initialData.length = 0;
+            addedData.length = 0;
+            chart.update();
+            updateStats();
+        }
+
+        function calculateCorrelation(data) {
+            if (data.length < 2) {
+                return 0;
+            }
+
+            const xValues = data.map(p => p.x);
+            const yValues = data.map(p => p.y);
+
+            const n = data.length;
+            const sumX = xValues.reduce((a, b) => a + b, 0);
+            const sumY = yValues.reduce((a, b) => a + b, 0);
+            const sumXY = data.reduce((acc, p) => acc + p.x * p.y, 0);
+            const sumX2 = xValues.reduce((acc, val) => acc + val * val, 0);
+            const sumY2 = yValues.reduce((acc, val) => acc + val * val, 0);
+
+            const numerator = n * sumXY - sumX * sumY;
+            const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+            if (denominator === 0) {
+                return 0;
+            }
+
+            return numerator / denominator;
+        }
+
+        function updateStats() {
+            const allData = initialData.concat(addedData);
+            const correlation = calculateCorrelation(allData);
+            document.getElementById('correlation').textContent = correlation.toFixed(4);
+        }
+
+        window.addEventListener('load', () => {
+            const correlation = Math.random() * 1.4 - 0.7; // Random correlation between -0.7 and 0.7
+            initialData = generateCorrelatedData(initialPoints, correlation);
+            initChart();
+            updateStats();
+        });
+    </script>
+</body>
+</html>
