@@ -381,6 +381,7 @@
                                 console.log('Emitting remove-point:', { roomId, datasetIndex, pointIndex });
                                 socket.emit('remove-point', { roomId, datasetIndex, pointIndex });
                                 
+                                // Optimistically update turn state (will be corrected by server if needed)
                                 pointsInCurrentTurn++;
                                 updateTurnDisplay();
                             }
@@ -399,6 +400,7 @@
                                     console.log('Emitting add-point:', { roomId, x: dataX, y: dataY });
                                     socket.emit('add-point', { roomId, x: dataX, y: dataY });
                                     
+                                    // Optimistically update turn state (will be corrected by server if needed)
                                     pointsInCurrentTurn++;
                                     updateTurnDisplay();
                                 }
@@ -573,8 +575,13 @@
             });
             
             socket.on('point-added', (point) => {
-                console.log('Received point from partner:', point);
-                addPartnerPoint(point.x, point.y);
+                console.log('Received point-added event:', point);
+                
+                // Only process points from partner, not own points
+                if (point.userId !== socket.id) {
+                    console.log('Adding partner point:', point);
+                    addPartnerPoint(point.x, point.y);
+                }
                 
                 // Update turn info if included
                 if (point.currentTurn !== undefined) {
@@ -585,8 +592,13 @@
             });
 
             socket.on('point-removed', (data) => {
-                console.log('Received point removal from partner:', data);
-                removePartnerPoint(data.datasetIndex, data.pointIndex);
+                console.log('Received point-removed event:', data);
+                
+                // Only process point removals from partner, not own removals
+                if (data.userId !== socket.id) {
+                    console.log('Removing partner point:', data);
+                    removePartnerPoint(data.datasetIndex, data.pointIndex);
+                }
                 
                 // Update turn info if included
                 if (data.currentTurn !== undefined) {
