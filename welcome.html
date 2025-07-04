@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R Arena - Welcome</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 3em;
+            font-weight: 300;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            font-size: 1.2em;
+            font-weight: 300;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 36px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .status.waiting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .status.matched {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>R Arena</h1>
+            <p>Real-time collaborative scatterplot game. Match with another player and work together to create patterns!</p>
+        </div>
+        
+        <button id="joinBtn" class="btn">Join Random Room</button>
+        
+        <div id="status" class="status hidden">
+            <div class="loading"></div>
+            <span id="statusText">Waiting for another player...</span>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const joinBtn = document.getElementById('joinBtn');
+        const status = document.getElementById('status');
+        const statusText = document.getElementById('statusText');
+
+        joinBtn.addEventListener('click', () => {
+            joinBtn.disabled = true;
+            status.classList.remove('hidden');
+            socket.emit('join-queue');
+        });
+
+        socket.on('waiting-for-match', () => {
+            status.classList.remove('matched');
+            status.classList.add('waiting');
+            statusText.textContent = 'Waiting for another player...';
+        });
+
+        socket.on('room-matched', (roomData) => {
+            status.classList.remove('waiting');
+            status.classList.add('matched');
+            statusText.textContent = 'Match found! Redirecting...';
+            
+            setTimeout(() => {
+                const initialDataParam = encodeURIComponent(JSON.stringify(roomData.initialData));
+                const playerIndex = roomData.playerIndex[socket.id];
+                window.location.href = `/game.html?room=${roomData.roomId}&correlation=${roomData.correlation}&initialData=${initialDataParam}&playerIndex=${playerIndex}&currentTurn=${roomData.currentTurn}&pointsInCurrentTurn=${roomData.pointsInCurrentTurn}&maxPointsPerTurn=${roomData.maxPointsPerTurn}`;
+            }, 1000);
+        });
+
+        socket.on('user-disconnected', () => {
+            status.classList.remove('matched');
+            status.classList.add('waiting');
+            statusText.textContent = 'Other player disconnected. Waiting for new match...';
+            joinBtn.disabled = false;
+        });
+    </script>
+</body>
+</html>
