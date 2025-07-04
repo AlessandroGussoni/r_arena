@@ -589,6 +589,166 @@
                 transform: translateX(100%);
             }
         }
+
+        /* Game Result Window */
+        .game-result-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .game-result-window {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.25),
+                0 0 0 1px rgba(255, 255, 255, 0.8);
+            animation: scaleIn 0.4s ease-out 0.1s both;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .result-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        .result-title.win {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .result-title.lose {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .result-subtitle {
+            color: #6b7280;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        .score-container {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .score-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 12px 0;
+            font-size: 1rem;
+            min-height: 40px;
+        }
+
+        .score-label {
+            color: #4b5563;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .score-value-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .score-value {
+            color: #1f2937;
+            font-weight: 600;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        .winner-badge {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 12px;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+            white-space: nowrap;
+        }
+
+        .result-actions {
+            margin-top: 32px;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        .result-btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .result-btn.primary {
+            background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .result-btn.primary:hover {
+            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .result-btn.secondary {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            color: #374151;
+            border: 2px solid #d1d5db;
+        }
+
+        .result-btn.secondary:hover {
+            background: linear-gradient(135deg, #e2e8f0 0%, #d1d5db 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -881,6 +1041,63 @@
             }
             clearTimeout(reconnectTimer);
             clearInterval(countdownInterval);
+        }
+
+        function showGameResult(data) {
+            const isWinner = data.winner === myPlayerIndex + 1;
+            const overlay = document.createElement('div');
+            overlay.className = 'game-result-overlay';
+            
+            overlay.innerHTML = `
+                <div class="game-result-window">
+                    <h1 class="result-title ${isWinner ? 'win' : 'lose'}">
+                        ${isWinner ? 'You Win!' : 'You Lose'}
+                    </h1>
+                    <p class="result-subtitle">
+                        ${isWinner ? 'Congratulations! You had the lowest average error.' : 'Better luck next time!'}
+                    </p>
+                    
+                    <div class="score-container">
+                        <div class="score-item">
+                            <span class="score-label">Your Average Error:</span>
+                            <div class="score-value-container">
+                                <span class="score-value">
+                                    ${(myPlayerIndex === 0 ? data.player1AvgError : data.player2AvgError).toFixed(4)}
+                                </span>
+                                ${data.winner === myPlayerIndex + 1 ? '<span class="winner-badge">Winner!</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Partner's Average Error:</span>
+                            <div class="score-value-container">
+                                <span class="score-value">
+                                    ${(myPlayerIndex === 0 ? data.player2AvgError : data.player1AvgError).toFixed(4)}
+                                </span>
+                                ${data.winner !== myPlayerIndex + 1 ? '<span class="winner-badge">Winner!</span>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="result-actions">
+                        <button class="result-btn secondary" onclick="playAgain()">
+                            Play Again
+                        </button>
+                        <button class="result-btn primary" onclick="goToLobby()">
+                            Exit to Lobby
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+        }
+
+        function playAgain() {
+            window.location.href = '/welcome.html';
+        }
+
+        function goToLobby() {
+            window.location.href = '/welcome.html';
         }
         
         function startCountdown() {
@@ -1299,8 +1516,7 @@
             });
 
             socket.on('game-over', (data) => {
-                alert(`Game Over!\n\nFinal Scores:\nPlayer 1 Average Error: ${data.player1AvgError.toFixed(4)}\nPlayer 2 Average Error: ${data.player2AvgError.toFixed(4)}\n\nWinner: Player ${data.winner}`);
-                window.location.href = '/welcome.html';
+                showGameResult(data);
             });
 
             socket.on('turn-error', (error) => {
