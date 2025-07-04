@@ -612,12 +612,6 @@
                 console.log('Turn changed:', turnData);
                 currentTurn = turnData.currentTurn;
                 pointsInCurrentTurn = turnData.pointsInCurrentTurn;
-                
-                if (turnData.roundComplete) {
-                    console.log('Round completed, starting new round');
-                    endGameRound();
-                }
-                
                 updateTurnDisplay();
             });
             
@@ -627,13 +621,32 @@
                 // Partner submitted their guess
                 if (data.playerIndex !== myPlayerIndex && hasSubmittedGuess) {
                     // Both players have submitted guesses, start the round
-                    console.log('Both players have submitted guesses, waiting for round-start event');
+                    console.log('Both players have submitted guesses, starting play phase');
+                    gamePhase = 'play';
+                    updateTurnDisplay();
                 }
             });
             
             socket.on('round-start', (data) => {
                 console.log('Round starting:', data);
                 gamePhase = 'play';
+                updateTurnDisplay();
+            });
+            
+            socket.on('new-round', (data) => {
+                console.log('New round started:', data);
+                currentRound = data.currentRound;
+                gamePhase = data.gamePhase;
+                currentTurn = data.currentTurn;
+                hasSubmittedGuess = false;
+                pointsInCurrentTurn = 0;
+                
+                // Re-enable guess input for new round
+                document.getElementById('correlationGuess').disabled = false;
+                document.getElementById('submitGuessBtn').disabled = false;
+                document.getElementById('correlationGuess').value = '';
+                
+                console.log(`Starting round ${currentRound}, reset to guess phase`);
                 updateTurnDisplay();
             });
             
@@ -664,7 +677,6 @@
             }
             
             hasSubmittedGuess = true;
-            gamePhase = 'play'; // Allow this player to play immediately after submitting guess
             
             if (socket && roomId) {
                 socket.emit('submit-guess', { roomId, guess, playerIndex: myPlayerIndex });
@@ -674,7 +686,7 @@
             guessInput.disabled = true;
             document.getElementById('submitGuessBtn').disabled = true;
             
-            console.log('Submitted guess and set game phase to play for this player');
+            console.log('Submitted guess for round', currentRound);
         }
         
         function startGameRound() {
@@ -683,27 +695,6 @@
             updateTurnDisplay();
         }
         
-        function startNewRound() {
-            gamePhase = 'guess';
-            hasSubmittedGuess = false;
-            pointsInCurrentTurn = 0;
-            currentTurn = 0; // Reset to first player
-            document.getElementById('correlationGuess').disabled = false;
-            document.getElementById('submitGuessBtn').disabled = false;
-            document.getElementById('correlationGuess').value = '';
-            console.log('Starting new round, game phase set to guess, reset to player 0 turn');
-            updateTurnDisplay();
-        }
-        
-        function endGameRound() {
-            if (currentRound >= maxRounds) {
-                // Game over - calculate final scores
-                endGame();
-            } else {
-                currentRound++;
-                startNewRound();
-            }
-        }
         
         function endGame() {
             if (socket && roomId) {
