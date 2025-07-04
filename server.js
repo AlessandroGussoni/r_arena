@@ -59,6 +59,78 @@ function generateCorrelatedData(n, r) {
     return scaledX.map((val, i) => ({x: val, y: scaledY[i]}));
 }
 
+// Calculate correlation from data points
+function calculateCorrelation(data) {
+    if (data.length < 2) {
+        return 0;
+    }
+
+    const xValues = data.map(p => p.x);
+    const yValues = data.map(p => p.y);
+
+    const n = data.length;
+    const sumX = xValues.reduce((a, b) => a + b, 0);
+    const sumY = yValues.reduce((a, b) => a + b, 0);
+    const sumXY = data.reduce((acc, p) => acc + p.x * p.y, 0);
+    const sumX2 = xValues.reduce((acc, val) => acc + val * val, 0);
+    const sumY2 = yValues.reduce((acc, val) => acc + val * val, 0);
+
+    const numerator = n * sumXY - sumX * sumY;
+    const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+    if (denominator === 0) {
+        return 0;
+    }
+
+    return numerator / denominator;
+}
+
+// Calculate final scores and determine winner
+function calculateFinalScores(roomId) {
+    if (!rooms.has(roomId)) {
+        return;
+    }
+    
+    const room = rooms.get(roomId);
+    
+    // Calculate true correlation from initial data
+    const trueCorrelation = calculateCorrelation(room.initialData);
+    
+    // Group guesses by player
+    const player1Guesses = room.guesses.filter(g => g.playerIndex === 0);
+    const player2Guesses = room.guesses.filter(g => g.playerIndex === 1);
+    
+    // Calculate absolute errors for each player
+    const player1Errors = player1Guesses.map(g => Math.abs(trueCorrelation - g.guess));
+    const player2Errors = player2Guesses.map(g => Math.abs(trueCorrelation - g.guess));
+    
+    // Calculate average errors
+    const player1AvgError = player1Errors.length > 0 ? player1Errors.reduce((a, b) => a + b, 0) / player1Errors.length : Infinity;
+    const player2AvgError = player2Errors.length > 0 ? player2Errors.reduce((a, b) => a + b, 0) / player2Errors.length : Infinity;
+    
+    // Determine winner (lowest average error)
+    const winner = player1AvgError < player2AvgError ? 1 : 2;
+    
+    console.log(`Game over for room ${roomId}:`);
+    console.log(`True correlation: ${trueCorrelation}`);
+    console.log(`Player 1 average error: ${player1AvgError}`);
+    console.log(`Player 2 average error: ${player2AvgError}`);
+    console.log(`Winner: Player ${winner}`);
+    
+    // Send results to all players
+    io.to(roomId).emit('game-over', {
+        trueCorrelation: trueCorrelation,
+        player1AvgError: player1AvgError,
+        player2AvgError: player2AvgError,
+        winner: winner,
+        player1Guesses: player1Guesses,
+        player2Guesses: player2Guesses
+    });
+    
+    // Clean up room
+    rooms.delete(roomId);
+}
+
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
@@ -79,7 +151,12 @@ io.on('connection', (socket) => {
                 points: [],
                 currentTurn: 0, // 0 = first user, 1 = second user
                 pointsInCurrentTurn: 0,
-                maxPointsPerTurn: 3
+                maxPointsPerTurn: 3,
+                currentRound: 1,
+                maxRounds: 3,
+                gamePhase: 'guess', // 'guess' or 'play'
+                guesses: [], // Array to store all guesses with rounds
+                roundsCompleted: 0
             });
             
             // Join both users to room
@@ -95,6 +172,9 @@ io.on('connection', (socket) => {
                 currentTurn: 0,
                 pointsInCurrentTurn: 0,
                 maxPointsPerTurn: 3,
+                currentRound: 1,
+                maxRounds: 3,
+                gamePhase: 'guess',
                 playerIndex: { [waitingUser.id]: 0, [socket.id]: 1 }
             };
             
@@ -125,6 +205,11 @@ io.on('connection', (socket) => {
             currentTurn: 0,
             pointsInCurrentTurn: 0,
             maxPointsPerTurn: 3,
+            currentRound: 1,
+            maxRounds: 3,
+            gamePhase: 'guess',
+            guesses: [],
+            roundsCompleted: 0,
             createdBy: socket.id
         });
         
@@ -173,6 +258,9 @@ io.on('connection', (socket) => {
                 currentTurn: 0,
                 pointsInCurrentTurn: 0,
                 maxPointsPerTurn: 3,
+                currentRound: 1,
+                maxRounds: 3,
+                gamePhase: 'guess',
                 playerIndex: { [room.users[0]]: 0, [room.users[1]]: 1 }
             };
             
@@ -228,6 +316,14 @@ io.on('connection', (socket) => {
                 return;
             }
             
+            // Check if player has submitted a guess for this round
+            const playerGuessForRound = room.guesses.find(g => g.playerIndex === userIndex && g.round === room.currentRound);
+            if (!playerGuessForRound) {
+                console.log(`User ${socket.id} tried to add point but hasn't submitted guess for round ${room.currentRound}`);
+                socket.emit('turn-error', { message: "Please submit your correlation guess first!" });
+                return;
+            }
+            
             // Check if player has reached max points for this turn
             if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
                 console.log(`User ${socket.id} tried to add point but turn limit reached`);
@@ -247,11 +343,35 @@ io.on('connection', (socket) => {
                 room.pointsInCurrentTurn = 0;
                 console.log(`Turn switched to player ${room.currentTurn}`);
                 
+                // Check if both players have completed their turns for this round
+                const player0Actions = room.points.filter(p => room.users.indexOf(p.userId) === 0).length;
+                const player1Actions = room.points.filter(p => room.users.indexOf(p.userId) === 1).length;
+                const roundComplete = player0Actions >= room.maxPointsPerTurn && player1Actions >= room.maxPointsPerTurn;
+                
                 // Broadcast turn change to all users in room
                 io.to(roomId).emit('turn-changed', {
                     currentTurn: room.currentTurn,
-                    pointsInCurrentTurn: room.pointsInCurrentTurn
+                    pointsInCurrentTurn: room.pointsInCurrentTurn,
+                    roundComplete: roundComplete
                 });
+                
+                if (roundComplete) {
+                    room.roundsCompleted++;
+                    
+                    if (room.roundsCompleted >= room.maxRounds) {
+                        // Game over - calculate final scores
+                        calculateFinalScores(roomId);
+                    } else {
+                        // Start new round
+                        room.currentRound++;
+                        room.gamePhase = 'guess';
+                        room.currentTurn = 0;
+                        room.pointsInCurrentTurn = 0;
+                        room.points = []; // Reset points for next round
+                        
+                        console.log(`Starting new round ${room.currentRound}`);
+                    }
+                }
             }
             
             // Broadcast point to all users in room
@@ -283,6 +403,14 @@ io.on('connection', (socket) => {
                 return;
             }
             
+            // Check if player has submitted a guess for this round
+            const playerGuessForRound = room.guesses.find(g => g.playerIndex === userIndex && g.round === room.currentRound);
+            if (!playerGuessForRound) {
+                console.log(`User ${socket.id} tried to remove point but hasn't submitted guess for round ${room.currentRound}`);
+                socket.emit('turn-error', { message: "Please submit your correlation guess first!" });
+                return;
+            }
+            
             // Check if player has reached max points for this turn
             if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
                 console.log(`User ${socket.id} tried to remove point but turn limit reached`);
@@ -300,11 +428,35 @@ io.on('connection', (socket) => {
                 room.pointsInCurrentTurn = 0;
                 console.log(`Turn switched to player ${room.currentTurn}`);
                 
+                // Check if both players have completed their turns for this round
+                const player0Actions = room.points.filter(p => room.users.indexOf(p.userId) === 0).length;
+                const player1Actions = room.points.filter(p => room.users.indexOf(p.userId) === 1).length;
+                const roundComplete = player0Actions >= room.maxPointsPerTurn && player1Actions >= room.maxPointsPerTurn;
+                
                 // Broadcast turn change to all users in room
                 io.to(roomId).emit('turn-changed', {
                     currentTurn: room.currentTurn,
-                    pointsInCurrentTurn: room.pointsInCurrentTurn
+                    pointsInCurrentTurn: room.pointsInCurrentTurn,
+                    roundComplete: roundComplete
                 });
+                
+                if (roundComplete) {
+                    room.roundsCompleted++;
+                    
+                    if (room.roundsCompleted >= room.maxRounds) {
+                        // Game over - calculate final scores
+                        calculateFinalScores(roomId);
+                    } else {
+                        // Start new round
+                        room.currentRound++;
+                        room.gamePhase = 'guess';
+                        room.currentTurn = 0;
+                        room.pointsInCurrentTurn = 0;
+                        room.points = []; // Reset points for next round
+                        
+                        console.log(`Starting new round ${room.currentRound}`);
+                    }
+                }
             }
             
             // Broadcast point removal to all users in room
@@ -333,6 +485,49 @@ io.on('connection', (socket) => {
         // Don't immediately delete rooms on disconnect
         // Users may reconnect when navigating between pages
         console.log(`User ${socket.id} disconnected, but keeping rooms active for reconnection`);
+    });
+    
+    socket.on('submit-guess', (data) => {
+        console.log(`Received guess from ${socket.id}:`, data);
+        const roomId = data.roomId;
+        const guess = data.guess;
+        const playerIndex = data.playerIndex;
+        
+        if (rooms.has(roomId)) {
+            const room = rooms.get(roomId);
+            
+            // Store the guess
+            room.guesses.push({
+                playerIndex: playerIndex,
+                guess: guess,
+                round: room.currentRound,
+                userId: socket.id
+            });
+            
+            console.log(`Guess stored for player ${playerIndex} in round ${room.currentRound}: ${guess}`);
+            
+            // Notify that guess was submitted
+            io.to(roomId).emit('guess-submitted', {
+                playerIndex: playerIndex,
+                round: room.currentRound
+            });
+            
+            // Check if both players have submitted guesses for this round
+            const roundGuesses = room.guesses.filter(g => g.round === room.currentRound);
+            if (roundGuesses.length === 2) {
+                console.log(`Both players have guessed for round ${room.currentRound}`);
+                // Don't change server game phase - let players play individually after their guess
+            }
+        } else {
+            console.log(`Room ${roomId} does not exist when submitting guess`);
+        }
+    });
+    
+    socket.on('end-game', (data) => {
+        const roomId = data.roomId;
+        if (rooms.has(roomId)) {
+            calculateFinalScores(roomId);
+        }
     });
     
     // Add explicit leave-room handler for when users actually want to leave

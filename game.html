@@ -160,12 +160,17 @@
     <div class="container">
         <div class="header">
             <h1>R Arena</h1>
-            <p>Correlation: <span id="correlation">-</span></p>
             <p>Room: <span id="roomId">-</span> | Players: <span id="playerCount">-</span></p>
-            <p><strong>Turn: <span id="turnInfo">-</span> | Points left: <span id="pointsLeft">-</span></strong></p>
+            <p><strong>Turn: <span id="turnInfo">-</span> | Round: <span id="roundInfo">-</span></strong></p>
+            <p><strong>Points left: <span id="pointsLeft">-</span></strong></p>
         </div>
         
         <div class="instructions">
+            <div id="guessSection" style="margin-bottom: 15px; display: none;">
+                <label for="correlationGuess">Guess the correlation (-1 to 1): </label>
+                <input type="number" id="correlationGuess" min="-1" max="1" step="0.01" style="width: 100px; margin: 0 10px;">
+                <button id="submitGuessBtn" class="btn mode-btn" onclick="submitGuess()">Submit Guess</button>
+            </div>
             <div id="modeToggle" style="margin-bottom: 10px;">
                 <button id="addModeBtn" class="btn mode-btn active" onclick="setMode('add')">Add Points</button>
                 <button id="removeModeBtn" class="btn mode-btn secondary" onclick="setMode('remove')">Remove Points</button>
@@ -207,6 +212,11 @@
         let pointsInCurrentTurn = 0;
         let maxPointsPerTurn = 3;
         let currentMode = 'add';
+        let currentRound = 1;
+        let maxRounds = 3;
+        let gamePhase = 'guess'; // 'guess' or 'play'
+        let userGuesses = [];
+        let hasSubmittedGuess = false;
 
         function generateCorrelatedData(n, r) {
             const randn_bm = () => {
@@ -344,10 +354,20 @@
                         }
                     },
                     onClick: (event, elements) => {
+                        if (!hasSubmittedGuess) {
+                            alert('Please submit your correlation guess first!');
+                            console.log('Current game phase:', gamePhase, 'Has submitted guess:', hasSubmittedGuess);
+                            return;
+                        }
+                        
                         if (!canPerformAction()) {
-                            alert(currentTurn === myPlayerIndex ? 
-                                'You\'ve reached your turn limit! Wait for your partner.' : 
-                                'It\'s not your turn!');
+                            if (gamePhase !== 'play') {
+                                alert('Game phase is not active!');
+                            } else {
+                                alert(currentTurn === myPlayerIndex ? 
+                                    'You\'ve reached your turn limit! Wait for your partner.' : 
+                                    'It\'s not your turn!');
+                            }
                             return;
                         }
 
@@ -430,9 +450,8 @@
         }
 
         function updateStats() {
-            const allData = initialData.concat(addedData).concat(chart.data.datasets[2].data);
-            const correlation = calculateCorrelation(allData);
-            document.getElementById('correlation').textContent = correlation.toFixed(4);
+            // No longer display correlation - it's hidden during gameplay
+            return;
         }
 
         function updateTurnDisplay() {
@@ -440,15 +459,28 @@
             const pointsLeft = maxPointsPerTurn - pointsInCurrentTurn;
             
             document.getElementById('turnInfo').textContent = isMyTurn ? 'Your turn' : 'Partner\'s turn';
+            document.getElementById('roundInfo').textContent = `${currentRound}/${maxRounds}`;
             document.getElementById('pointsLeft').textContent = isMyTurn ? pointsLeft : '-';
             
             // Update turn info color
             const turnElement = document.getElementById('turnInfo');
             turnElement.style.color = isMyTurn ? '#2ecc71' : '#e74c3c';
+            
+            // Show/hide guess section based on game phase
+            const guessSection = document.getElementById('guessSection');
+            if (gamePhase === 'guess' && isMyTurn && !hasSubmittedGuess) {
+                guessSection.style.display = 'block';
+            } else {
+                guessSection.style.display = 'none';
+            }
         }
 
         function canPerformAction() {
-            return currentTurn === myPlayerIndex && pointsInCurrentTurn < maxPointsPerTurn;
+            // Player can act if:
+            // 1. They have submitted their guess for this round (hasSubmittedGuess = true)
+            // 2. It's their turn
+            // 3. They haven't exceeded their move limit
+            return hasSubmittedGuess && currentTurn === myPlayerIndex && pointsInCurrentTurn < maxPointsPerTurn;
         }
 
         function setMode(mode) {
@@ -505,6 +537,10 @@
             currentTurn = parseInt(urlParams.get('currentTurn') || '0');
             pointsInCurrentTurn = parseInt(urlParams.get('pointsInCurrentTurn') || '0');
             maxPointsPerTurn = parseInt(urlParams.get('maxPointsPerTurn') || '3');
+            currentRound = parseInt(urlParams.get('currentRound') || '1');
+            gamePhase = urlParams.get('gamePhase') || 'guess';
+            
+            console.log('Initialized game with phase:', gamePhase, 'round:', currentRound, 'player:', myPlayerIndex);
             
             if (!roomId || isNaN(targetCorrelation) || myPlayerIndex === -1) {
                 window.location.href = '/welcome.html';
@@ -564,7 +600,35 @@
                 console.log('Turn changed:', turnData);
                 currentTurn = turnData.currentTurn;
                 pointsInCurrentTurn = turnData.pointsInCurrentTurn;
+                
+                if (turnData.roundComplete) {
+                    console.log('Round completed, starting new round');
+                    endGameRound();
+                }
+                
                 updateTurnDisplay();
+            });
+            
+            socket.on('guess-submitted', (data) => {
+                console.log('Guess submitted by player:', data);
+                console.log('My player index:', myPlayerIndex, 'Has submitted guess:', hasSubmittedGuess);
+                // Partner submitted their guess
+                if (data.playerIndex !== myPlayerIndex && hasSubmittedGuess) {
+                    // Both players have submitted guesses, start the round
+                    console.log('Both players have submitted guesses, waiting for round-start event');
+                }
+            });
+            
+            socket.on('round-start', (data) => {
+                console.log('Round starting:', data);
+                gamePhase = 'play';
+                updateTurnDisplay();
+            });
+            
+            socket.on('game-over', (data) => {
+                console.log('Game over:', data);
+                alert(`Game Over!\n\nFinal Scores:\nPlayer 1 Average Error: ${data.player1AvgError.toFixed(4)}\nPlayer 2 Average Error: ${data.player2AvgError.toFixed(4)}\n\nWinner: Player ${data.winner}`);
+                window.location.href = '/welcome.html';
             });
 
             socket.on('turn-error', (error) => {
@@ -576,6 +640,63 @@
                 alert('Your partner has disconnected. Returning to lobby...');
                 window.location.href = '/welcome.html';
             });
+        }
+
+        function submitGuess() {
+            const guessInput = document.getElementById('correlationGuess');
+            const guess = parseFloat(guessInput.value);
+            
+            if (isNaN(guess) || guess < -1 || guess > 1) {
+                alert('Please enter a valid correlation between -1 and 1');
+                return;
+            }
+            
+            hasSubmittedGuess = true;
+            gamePhase = 'play'; // Allow this player to play immediately after submitting guess
+            
+            if (socket && roomId) {
+                socket.emit('submit-guess', { roomId, guess, playerIndex: myPlayerIndex });
+            }
+            
+            updateTurnDisplay();
+            guessInput.disabled = true;
+            document.getElementById('submitGuessBtn').disabled = true;
+            
+            console.log('Submitted guess and set game phase to play for this player');
+        }
+        
+        function startGameRound() {
+            gamePhase = 'play';
+            console.log('Game phase set to play');
+            updateTurnDisplay();
+        }
+        
+        function startNewRound() {
+            gamePhase = 'guess';
+            hasSubmittedGuess = false;
+            pointsInCurrentTurn = 0;
+            currentTurn = 0; // Reset to first player
+            document.getElementById('correlationGuess').disabled = false;
+            document.getElementById('submitGuessBtn').disabled = false;
+            document.getElementById('correlationGuess').value = '';
+            console.log('Starting new round, game phase set to guess, reset to player 0 turn');
+            updateTurnDisplay();
+        }
+        
+        function endGameRound() {
+            if (currentRound >= maxRounds) {
+                // Game over - calculate final scores
+                endGame();
+            } else {
+                currentRound++;
+                startNewRound();
+            }
+        }
+        
+        function endGame() {
+            if (socket && roomId) {
+                socket.emit('end-game', { roomId });
+            }
         }
 
         window.addEventListener('load', initializeGame);
