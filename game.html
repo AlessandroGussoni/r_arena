@@ -102,6 +102,21 @@
             color: #0c5460;
             text-align: center;
         }
+
+        .mode-btn {
+            margin: 0 5px;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        .mode-btn.active:hover {
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -114,7 +129,11 @@
         </div>
         
         <div class="instructions">
-            Click anywhere on the plot to add points. Work with your partner to create interesting patterns!
+            <div id="modeToggle" style="margin-bottom: 10px;">
+                <button id="addModeBtn" class="btn mode-btn active" onclick="setMode('add')">Add Points</button>
+                <button id="removeModeBtn" class="btn mode-btn secondary" onclick="setMode('remove')">Remove Points</button>
+            </div>
+            <div id="instructionText">Click anywhere on the plot to add points. Work with your partner to create interesting patterns!</div>
         </div>
 
         <div class="legend">
@@ -150,6 +169,7 @@
         let currentTurn = 0;
         let pointsInCurrentTurn = 0;
         let maxPointsPerTurn = 3;
+        let currentMode = 'add';
 
         function generateCorrelatedData(n, r) {
             const randn_bm = () => {
@@ -287,30 +307,44 @@
                         }
                     },
                     onClick: (event, elements) => {
-                        const rect = chart.canvas.getBoundingClientRect();
-                        const x = event.clientX - rect.left;
-                        const y = event.clientY - rect.top;
-                        
-                        const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
-                        const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
-                        const dataY = chart.scales.y.getValueForPixel(canvasPosition.y);
-                        
-                        if (dataX >= -100 && dataX <= 100 && dataY >= -100 && dataY <= 100) {
-                            if (!canPlacePoint()) {
-                                alert(currentTurn === myPlayerIndex ? 
-                                    'You\'ve reached your turn limit! Wait for your partner.' : 
-                                    'It\'s not your turn!');
-                                return;
-                            }
+                        if (!canPerformAction()) {
+                            alert(currentTurn === myPlayerIndex ? 
+                                'You\'ve reached your turn limit! Wait for your partner.' : 
+                                'It\'s not your turn!');
+                            return;
+                        }
+
+                        if (currentMode === 'remove' && elements.length > 0) {
+                            const element = elements[0];
+                            const datasetIndex = element.datasetIndex;
+                            const pointIndex = element.index;
                             
-                            addPoint(dataX, dataY);
+                            removePoint(datasetIndex, pointIndex);
                             if (socket && roomId) {
-                                console.log('Emitting add-point:', { roomId, x: dataX, y: dataY });
-                                socket.emit('add-point', { roomId, x: dataX, y: dataY });
+                                console.log('Emitting remove-point:', { roomId, datasetIndex, pointIndex });
+                                socket.emit('remove-point', { roomId, datasetIndex, pointIndex });
                                 
-                                // Update local turn counter immediately for responsive UI
                                 pointsInCurrentTurn++;
                                 updateTurnDisplay();
+                            }
+                        } else if (currentMode === 'add') {
+                            const rect = chart.canvas.getBoundingClientRect();
+                            const x = event.clientX - rect.left;
+                            const y = event.clientY - rect.top;
+                            
+                            const canvasPosition = Chart.helpers.getRelativePosition(event, chart);
+                            const dataX = chart.scales.x.getValueForPixel(canvasPosition.x);
+                            const dataY = chart.scales.y.getValueForPixel(canvasPosition.y);
+                            
+                            if (dataX >= -100 && dataX <= 100 && dataY >= -100 && dataY <= 100) {
+                                addPoint(dataX, dataY);
+                                if (socket && roomId) {
+                                    console.log('Emitting add-point:', { roomId, x: dataX, y: dataY });
+                                    socket.emit('add-point', { roomId, x: dataX, y: dataY });
+                                    
+                                    pointsInCurrentTurn++;
+                                    updateTurnDisplay();
+                                }
                             }
                         }
                     },
@@ -376,8 +410,53 @@
             turnElement.style.color = isMyTurn ? '#2ecc71' : '#e74c3c';
         }
 
-        function canPlacePoint() {
+        function canPerformAction() {
             return currentTurn === myPlayerIndex && pointsInCurrentTurn < maxPointsPerTurn;
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            const addBtn = document.getElementById('addModeBtn');
+            const removeBtn = document.getElementById('removeModeBtn');
+            const instructionText = document.getElementById('instructionText');
+            
+            if (mode === 'add') {
+                addBtn.classList.add('active');
+                addBtn.classList.remove('secondary');
+                removeBtn.classList.remove('active');
+                removeBtn.classList.add('secondary');
+                instructionText.textContent = 'Click anywhere on the plot to add points. Work with your partner to create interesting patterns!';
+            } else {
+                removeBtn.classList.add('active');
+                removeBtn.classList.remove('secondary');
+                addBtn.classList.remove('active');
+                addBtn.classList.add('secondary');
+                instructionText.textContent = 'Click on any point to remove it. This counts toward your turn limit!';
+            }
+        }
+
+        function removePoint(datasetIndex, pointIndex) {
+            if (datasetIndex === 0) {
+                initialData.splice(pointIndex, 1);
+            } else if (datasetIndex === 1) {
+                addedData.splice(pointIndex, 1);
+            } else if (datasetIndex === 2) {
+                chart.data.datasets[2].data.splice(pointIndex, 1);
+            }
+            chart.update();
+            updateStats();
+        }
+
+        function removePartnerPoint(datasetIndex, pointIndex) {
+            if (datasetIndex === 0) {
+                initialData.splice(pointIndex, 1);
+            } else if (datasetIndex === 1) {
+                chart.data.datasets[1].data.splice(pointIndex, 1);
+            } else if (datasetIndex === 2) {
+                chart.data.datasets[2].data.splice(pointIndex, 1);
+            }
+            chart.update();
+            updateStats();
         }
 
         function initializeGame() {
@@ -428,6 +507,18 @@
                 if (point.currentTurn !== undefined) {
                     currentTurn = point.currentTurn;
                     pointsInCurrentTurn = point.pointsInCurrentTurn;
+                    updateTurnDisplay();
+                }
+            });
+
+            socket.on('point-removed', (data) => {
+                console.log('Received point removal from partner:', data);
+                removePartnerPoint(data.datasetIndex, data.pointIndex);
+                
+                // Update turn info if included
+                if (data.currentTurn !== undefined) {
+                    currentTurn = data.currentTurn;
+                    pointsInCurrentTurn = data.pointsInCurrentTurn;
                     updateTurnDisplay();
                 }
             });

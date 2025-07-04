@@ -188,6 +188,59 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('remove-point', (data) => {
+        console.log(`Received remove-point from ${socket.id}:`, data);
+        const roomId = data.roomId;
+        const removeData = { datasetIndex: data.datasetIndex, pointIndex: data.pointIndex, userId: socket.id };
+        
+        if (rooms.has(roomId)) {
+            const room = rooms.get(roomId);
+            const userIndex = room.users.indexOf(socket.id);
+            
+            // Check if it's this player's turn
+            if (userIndex !== room.currentTurn) {
+                console.log(`User ${socket.id} tried to remove point but it's not their turn. Current turn: ${room.currentTurn}, User index: ${userIndex}`);
+                socket.emit('turn-error', { message: "It's not your turn!" });
+                return;
+            }
+            
+            // Check if player has reached max points for this turn
+            if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
+                console.log(`User ${socket.id} tried to remove point but turn limit reached`);
+                socket.emit('turn-error', { message: "You've reached your turn limit!" });
+                return;
+            }
+            
+            room.pointsInCurrentTurn++;
+            
+            console.log(`Point removed from room ${roomId} by user ${socket.id}. Points in turn: ${room.pointsInCurrentTurn}/${room.maxPointsPerTurn}`);
+            
+            // Check if turn should switch
+            if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
+                room.currentTurn = 1 - room.currentTurn; // Switch turn (0->1, 1->0)
+                room.pointsInCurrentTurn = 0;
+                console.log(`Turn switched to player ${room.currentTurn}`);
+                
+                // Broadcast turn change to all users in room
+                io.to(roomId).emit('turn-changed', {
+                    currentTurn: room.currentTurn,
+                    pointsInCurrentTurn: room.pointsInCurrentTurn
+                });
+            }
+            
+            // Broadcast point removal to all users in room
+            io.to(roomId).emit('point-removed', {
+                ...removeData,
+                currentTurn: room.currentTurn,
+                pointsInCurrentTurn: room.pointsInCurrentTurn
+            });
+            
+            console.log(`Point removal broadcasted to room ${roomId} by user ${socket.id}`);
+        } else {
+            console.log(`Room ${roomId} does not exist when removing point`);
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         
