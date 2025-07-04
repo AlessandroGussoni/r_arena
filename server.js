@@ -110,6 +110,85 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('create-room', () => {
+        console.log('User creating room:', socket.id);
+        const roomId = generateRoomId();
+        const correlation = generateRandomCorrelation();
+        const initialData = generateCorrelatedData(10, correlation);
+        
+        // Create room with only one user initially
+        rooms.set(roomId, {
+            users: [socket.id, null], // Second slot empty for friend to join
+            correlation: correlation,
+            initialData: initialData,
+            points: [],
+            currentTurn: 0,
+            pointsInCurrentTurn: 0,
+            maxPointsPerTurn: 3,
+            createdBy: socket.id
+        });
+        
+        socket.join(roomId);
+        
+        // Send room info to creator
+        socket.emit('room-created', {
+            roomId: roomId,
+            correlation: correlation,
+            initialData: initialData
+        });
+        
+        console.log(`Room ${roomId} created by user ${socket.id}`);
+    });
+
+    socket.on('join-room-by-id', (data) => {
+        const roomId = data.roomId.toLowerCase(); // Convert to lowercase for case-insensitive lookup
+        console.log(`User ${socket.id} attempting to join room by ID: ${roomId}`);
+        
+        if (!rooms.has(roomId)) {
+            socket.emit('room-join-error', { message: 'Room not found' });
+            return;
+        }
+        
+        const room = rooms.get(roomId);
+        
+        // Check if room is full
+        if (room.users[0] && room.users[1]) {
+            socket.emit('room-join-error', { message: 'Room is full' });
+            return;
+        }
+        
+        // Add user to room
+        const playerIndex = room.users[0] === null ? 0 : 1;
+        room.users[playerIndex] = socket.id;
+        
+        socket.join(roomId);
+        
+        // If room is now full, start the game
+        if (room.users[0] && room.users[1]) {
+            const roomData = {
+                roomId: roomId,
+                correlation: room.correlation,
+                initialData: room.initialData,
+                users: 2,
+                currentTurn: 0,
+                pointsInCurrentTurn: 0,
+                maxPointsPerTurn: 3,
+                playerIndex: { [room.users[0]]: 0, [room.users[1]]: 1 }
+            };
+            
+            // Send to both users
+            io.to(roomId).emit('room-matched', roomData);
+            console.log(`Room ${roomId} is now full and starting game`);
+        } else {
+            // Send waiting message to the joiner
+            socket.emit('room-waiting', {
+                roomId: roomId,
+                message: 'Waiting for the room creator to start the game...'
+            });
+            console.log(`User ${socket.id} joined room ${roomId}, waiting for second player`);
+        }
+    });
+
     socket.on('join-room', (data) => {
         const roomId = data.roomId || data; // Handle both string and object
         const playerIndex = data.playerIndex;

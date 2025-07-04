@@ -167,6 +167,114 @@
             transform: none;
         }
 
+        .btn.secondary {
+            background: #6b7280;
+            margin: 0 8px;
+        }
+
+        .btn.secondary:hover {
+            background: #4b5563;
+        }
+
+        .room-code-section {
+            margin: 24px 0;
+            padding: 24px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            border: 1px solid #e9ecef;
+        }
+
+        .room-code-section input {
+            width: 200px;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+            margin-right: 12px;
+            font-family: monospace;
+            text-transform: lowercase;
+        }
+
+        .room-code-section input:focus {
+            outline: none;
+            border-color: #000;
+        }
+
+        .btn-cancel {
+            background: transparent;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-cancel:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .room-created-section {
+            margin: 24px 0;
+            padding: 32px 24px;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+            border-radius: 16px;
+            border: 1px solid #bbf7d0;
+        }
+
+        .room-code-display p {
+            margin: 0 0 16px 0;
+            color: #065f46;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .room-code {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .room-code span {
+            background: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #000;
+            border: 2px solid #10b981;
+        }
+
+        .copy-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: #059669;
+            transform: scale(1.05);
+        }
+
+        .room-instruction {
+            margin: 16px 0 0 0;
+            color: #065f46;
+            font-size: 0.9rem;
+        }
+
         .footer {
             text-align: center;
             padding: 32px 20px;
@@ -260,7 +368,27 @@
             
             
             <div class="cta-section">
-                <button id="joinBtn" class="btn">Start Playing</button>
+                <button id="joinBtn" class="btn">Quick Match</button>
+                <div style="margin: 20px 0; color: #94a3b8; font-size: 0.9rem;">or</div>
+                <button id="createRoomBtn" class="btn secondary">Create Room</button>
+                <button id="joinRoomBtn" class="btn secondary">Join Room</button>
+            </div>
+            
+            <div id="roomCodeSection" class="room-code-section hidden">
+                <input type="text" id="roomCodeInput" placeholder="Enter room code" maxlength="9">
+                <button id="joinByCodeBtn" class="btn">Join</button>
+                <button id="cancelJoinBtn" class="btn-cancel">Cancel</button>
+            </div>
+            
+            <div id="roomCreatedSection" class="room-created-section hidden">
+                <div class="room-code-display">
+                    <p>Room Created!</p>
+                    <div class="room-code">
+                        <span id="roomCodeDisplay"></span>
+                        <button id="copyCodeBtn" class="copy-btn" title="Copy room code">📋</button>
+                    </div>
+                    <p class="room-instruction">Share this code with your friend</p>
+                </div>
             </div>
             
             <div id="status" class="status hidden">
@@ -278,25 +406,134 @@
     <script>
         const socket = io();
         const joinBtn = document.getElementById('joinBtn');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
         const status = document.getElementById('status');
         const statusText = document.getElementById('statusText');
+        const roomCodeSection = document.getElementById('roomCodeSection');
+        const roomCreatedSection = document.getElementById('roomCreatedSection');
+        const roomCodeInput = document.getElementById('roomCodeInput');
+        const joinByCodeBtn = document.getElementById('joinByCodeBtn');
+        const cancelJoinBtn = document.getElementById('cancelJoinBtn');
+        const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+        const copyCodeBtn = document.getElementById('copyCodeBtn');
 
+        let currentRoomId = null;
+
+        // Quick match functionality
         joinBtn.addEventListener('click', () => {
+            hideAllSections();
             joinBtn.disabled = true;
             status.classList.remove('hidden');
             socket.emit('join-queue');
         });
 
+        // Create room functionality
+        createRoomBtn.addEventListener('click', () => {
+            hideAllSections();
+            createRoomBtn.disabled = true;
+            socket.emit('create-room');
+        });
+
+        // Join room functionality
+        joinRoomBtn.addEventListener('click', () => {
+            hideAllSections();
+            roomCodeSection.classList.remove('hidden');
+            roomCodeInput.focus();
+        });
+
+        // Join by code functionality
+        joinByCodeBtn.addEventListener('click', () => {
+            const roomCode = roomCodeInput.value.trim().toLowerCase();
+            if (roomCode) {
+                roomCodeSection.classList.add('hidden');
+                status.classList.remove('hidden');
+                statusText.textContent = 'Joining room...';
+                socket.emit('join-room-by-id', { roomId: roomCode });
+            }
+        });
+
+        // Cancel join functionality
+        cancelJoinBtn.addEventListener('click', () => {
+            hideAllSections();
+            roomCodeInput.value = '';
+        });
+
+        // Copy room code functionality
+        copyCodeBtn.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(currentRoomId);
+                copyCodeBtn.textContent = '✓';
+                setTimeout(() => {
+                    copyCodeBtn.textContent = '📋';
+                }, 2000);
+            } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = currentRoomId;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                copyCodeBtn.textContent = '✓';
+                setTimeout(() => {
+                    copyCodeBtn.textContent = '📋';
+                }, 2000);
+            }
+        });
+
+        // Enter key for room code input
+        roomCodeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                joinByCodeBtn.click();
+            }
+        });
+
+        function hideAllSections() {
+            status.classList.add('hidden');
+            roomCodeSection.classList.add('hidden');
+            roomCreatedSection.classList.add('hidden');
+        }
+
+        function resetButtons() {
+            joinBtn.disabled = false;
+            createRoomBtn.disabled = false;
+            joinRoomBtn.disabled = false;
+        }
+
+        // Socket event handlers
         socket.on('waiting-for-match', () => {
             status.classList.remove('matched');
             status.classList.add('waiting');
             statusText.textContent = 'Waiting for another player...';
         });
 
+        socket.on('room-created', (roomData) => {
+            hideAllSections();
+            currentRoomId = roomData.roomId;
+            roomCodeDisplay.textContent = roomData.roomId;
+            roomCreatedSection.classList.remove('hidden');
+            status.classList.remove('hidden');
+            status.classList.add('waiting');
+            statusText.textContent = 'Waiting for your friend to join...';
+        });
+
+        socket.on('room-waiting', (data) => {
+            status.classList.remove('hidden');
+            status.classList.add('waiting');
+            statusText.textContent = data.message;
+        });
+
+        socket.on('room-join-error', (error) => {
+            hideAllSections();
+            resetButtons();
+            alert(error.message);
+        });
+
         socket.on('room-matched', (roomData) => {
             status.classList.remove('waiting');
             status.classList.add('matched');
-            statusText.textContent = 'Match found! Redirecting...';
+            statusText.textContent = 'Match found! Starting game...';
             
             setTimeout(() => {
                 const initialDataParam = encodeURIComponent(JSON.stringify(roomData.initialData));
@@ -309,7 +546,7 @@
             status.classList.remove('matched');
             status.classList.add('waiting');
             statusText.textContent = 'Other player disconnected. Waiting for new match...';
-            joinBtn.disabled = false;
+            resetButtons();
         });
     </script>
 </body>
