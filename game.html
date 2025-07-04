@@ -333,6 +333,69 @@
             font-weight: 600;
         }
 
+        #timerDisplay {
+            transition: all 0.3s ease;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        #timerDisplay.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            animation: timerPulse 1s infinite;
+        }
+
+        @keyframes timerPulse {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+            }
+        }
+
+        /* Timer bar styles */
+        .timer-bar-container {
+            position: fixed;
+            top: 0;
+            left: 20px;
+            width: 8px;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            display: none;
+            box-sizing: border-box;
+        }
+
+        .timer-bar {
+            width: 100%;
+            background: linear-gradient(to top, #10b981 0%, #34d399 50%, #6ee7b7 100%);
+            border-radius: 3px;
+            transition: height 1s linear, background 0.3s ease;
+            height: 100%;
+            transform-origin: bottom;
+        }
+
+        .timer-bar.warning {
+            background: linear-gradient(to top, #ef4444 0%, #f87171 50%, #fca5a5 100%);
+            animation: barPulse 0.5s infinite alternate;
+        }
+
+        @keyframes barPulse {
+            0% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+            100% {
+                opacity: 0.8;
+                box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.6);
+            }
+        }
+
         #turnInfo.my-turn {
             background: linear-gradient(135deg, #10b981, #059669);
             color: white;
@@ -439,6 +502,93 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* Notification styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+            z-index: 1000;
+            font-weight: 500;
+            font-size: 0.95rem;
+            min-width: 300px;
+            animation: slideInRight 0.5s ease-out;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .notification.reconnecting {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 10px 25px rgba(245, 158, 11, 0.3);
+        }
+
+        .notification.reconnected {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+        }
+
+        .notification-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .notification-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .notification-icon.warning {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .notification-icon.reconnecting {
+            background: rgba(255, 255, 255, 0.2);
+            animation: spin 1s linear infinite;
+        }
+
+        .notification-icon.success {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .notification-countdown {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
     </style>
 </head>
 <body>
@@ -446,12 +596,16 @@
         <canvas class="stats-canvas" id="statsCanvas"></canvas>
     </div>
 
+    <div class="timer-bar-container" id="timerBarContainer">
+        <div class="timer-bar" id="timerBar"></div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>R Arena</h1>
             <p>Room: <span id="roomId">-</span> | Players: <span id="playerCount">-</span></p>
             <p><strong>Turn: <span id="turnInfo">-</span> | Round: <span id="roundInfo">-</span></strong></p>
-            <p><strong>Points left: <span id="pointsLeft">-</span></strong></p>
+            <p><strong>Points left: <span id="pointsLeft">-</span> | Time: <span id="timerDisplay">-</span></strong></p>
         </div>
 
         <div class="instructions">
@@ -669,6 +823,82 @@
         let gamePhase = 'guess';
         let userGuesses = [];
         let hasSubmittedGuess = false;
+        let disconnectNotification = null;
+        let reconnectTimer = null;
+        let countdownInterval = null;
+        let timeToRedirect = 30; // seconds
+        let turnTimer = null;
+        let turnTimeLeft = 20; // 20 seconds per turn
+        let timerDisplay = null;
+
+        // Notification system
+        function showNotification(type, title, message, countdown = false) {
+            // Remove existing notification
+            hideNotification();
+            
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            let iconSymbol = '⚠️';
+            let iconClass = 'warning';
+            
+            if (type === 'reconnecting') {
+                iconSymbol = '↻';
+                iconClass = 'reconnecting';
+            } else if (type === 'reconnected') {
+                iconSymbol = '✓';
+                iconClass = 'success';
+            }
+            
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <div class="notification-icon ${iconClass}">${iconSymbol}</div>
+                    <div>
+                        <div><strong>${title}</strong></div>
+                        <div>${message}</div>
+                        ${countdown ? `<div class="notification-countdown" id="countdown">Redirecting in ${timeToRedirect} seconds...</div>` : ''}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            disconnectNotification = notification;
+            
+            if (countdown) {
+                startCountdown();
+            }
+        }
+        
+        function hideNotification() {
+            if (disconnectNotification) {
+                disconnectNotification.style.animation = 'slideOutRight 0.3s ease-in-out forwards';
+                setTimeout(() => {
+                    if (disconnectNotification && disconnectNotification.parentNode) {
+                        disconnectNotification.parentNode.removeChild(disconnectNotification);
+                    }
+                    disconnectNotification = null;
+                }, 300);
+            }
+            clearTimeout(reconnectTimer);
+            clearInterval(countdownInterval);
+        }
+        
+        function startCountdown() {
+            const countdownEl = document.getElementById('countdown');
+            let timeLeft = timeToRedirect;
+            
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                if (countdownEl) {
+                    countdownEl.textContent = `Redirecting in ${timeLeft} seconds...`;
+                }
+                
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.href = '/welcome.html';
+                }
+            }, 1000);
+        }
 
         function generateCorrelatedData(n, r) {
             const randn_bm = () => {
@@ -907,8 +1137,14 @@
             const guessSection = document.getElementById('guessSection');
             if (gamePhase === 'guess' && isMyTurn && !hasSubmittedGuess) {
                 guessSection.style.display = 'block';
+                startTurnTimer();
             } else {
                 guessSection.style.display = 'none';
+                if (isMyTurn && gamePhase === 'play') {
+                    startTurnTimer();
+                } else {
+                    stopTurnTimer();
+                }
             }
         }
 
@@ -1030,6 +1266,13 @@
                 updateTurnDisplay();
             });
 
+            socket.on('force-turn-switched', (turnData) => {
+                currentTurn = turnData.currentTurn;
+                pointsInCurrentTurn = turnData.pointsInCurrentTurn;
+                stopTurnTimer();
+                updateTurnDisplay();
+            });
+
             socket.on('guess-submitted', (data) => {
                 if (data.playerIndex !== myPlayerIndex && hasSubmittedGuess) {
                     gamePhase = 'play';
@@ -1051,6 +1294,7 @@
                 document.getElementById('correlationGuess').disabled = false;
                 document.getElementById('submitGuessBtn').disabled = false;
                 document.getElementById('correlationGuess').value = '';
+                stopTurnTimer();
                 updateTurnDisplay();
             });
 
@@ -1064,9 +1308,149 @@
             });
 
             socket.on('user-disconnected', () => {
-                alert('Your partner has disconnected. Returning to lobby...');
-                window.location.href = '/welcome.html';
+                showNotification(
+                    'warning',
+                    'Partner Disconnected',
+                    'Your partner has left the game. You will be redirected to the lobby.',
+                    true
+                );
             });
+
+            socket.on('partner-reconnecting', () => {
+                showNotification(
+                    'reconnecting',
+                    'Partner Reconnecting',
+                    'Your partner is attempting to reconnect...'
+                );
+            });
+
+            socket.on('partner-reconnected', () => {
+                showNotification(
+                    'reconnected',
+                    'Partner Reconnected',
+                    'Your partner has successfully reconnected!'
+                );
+                // Hide the notification after 3 seconds
+                setTimeout(() => {
+                    hideNotification();
+                }, 3000);
+            });
+
+            // Handle socket disconnect/reconnect events
+            socket.on('disconnect', (reason) => {
+                if (reason === 'io server disconnect') {
+                    // Server disconnected this socket
+                    showNotification(
+                        'warning',
+                        'Connection Lost',
+                        'Lost connection to the game server. You will be redirected to the lobby.',
+                        true
+                    );
+                } else {
+                    // Client lost connection, will try to reconnect
+                    showNotification(
+                        'reconnecting',
+                        'Reconnecting',
+                        'Connection lost. Attempting to reconnect...'
+                    );
+                }
+            });
+
+            socket.on('connect', () => {
+                // Only show reconnected message if we had a notification
+                if (disconnectNotification && disconnectNotification.className.includes('reconnecting')) {
+                    showNotification(
+                        'reconnected',
+                        'Reconnected',
+                        'Successfully reconnected to the game!'
+                    );
+                    setTimeout(() => {
+                        hideNotification();
+                    }, 3000);
+                }
+            });
+        }
+
+        function startTurnTimer() {
+            stopTurnTimer(); // Clear any existing timer
+            turnTimeLeft = 20;
+            updateTimerDisplay();
+            showTimerBar();
+            
+            turnTimer = setInterval(() => {
+                turnTimeLeft--;
+                updateTimerDisplay();
+                
+                if (turnTimeLeft <= 0) {
+                    handleTurnTimeout();
+                }
+            }, 1000);
+        }
+
+        function stopTurnTimer() {
+            if (turnTimer) {
+                clearInterval(turnTimer);
+                turnTimer = null;
+            }
+            const timerElement = document.getElementById('timerDisplay');
+            timerElement.textContent = '-';
+            timerElement.className = '';
+            hideTimerBar();
+        }
+
+        function updateTimerDisplay() {
+            const timerElement = document.getElementById('timerDisplay');
+            timerElement.textContent = `${turnTimeLeft}s`;
+            
+            if (turnTimeLeft <= 5) {
+                timerElement.className = 'warning';
+            } else {
+                timerElement.className = '';
+            }
+            
+            updateTimerBar();
+        }
+
+        function showTimerBar() {
+            const timerBarContainer = document.getElementById('timerBarContainer');
+            timerBarContainer.style.display = 'block';
+            updateTimerBar();
+        }
+
+        function hideTimerBar() {
+            const timerBarContainer = document.getElementById('timerBarContainer');
+            timerBarContainer.style.display = 'none';
+        }
+
+        function updateTimerBar() {
+            const timerBar = document.getElementById('timerBar');
+            const percentage = (turnTimeLeft / 20) * 100;
+            
+            timerBar.style.height = `${percentage}%`;
+            
+            if (turnTimeLeft <= 5) {
+                timerBar.className = 'timer-bar warning';
+            } else {
+                timerBar.className = 'timer-bar';
+            }
+        }
+
+        function handleTurnTimeout() {
+            stopTurnTimer();
+            
+            if (gamePhase === 'guess' && !hasSubmittedGuess) {
+                // Auto-submit 0 as guess if time runs out during guess phase
+                const guessInput = document.getElementById('correlationGuess');
+                guessInput.value = '0';
+                submitGuess();
+                alert('Time\'s up! Your guess has been set to 0.');
+            } else if (gamePhase === 'play' && currentTurn === myPlayerIndex) {
+                // Force turn switch if time runs out during play phase
+                if (socket && roomId) {
+                    socket.emit('force-turn-switch', { roomId });
+                }
+                alert('Time\'s up! Your turn has ended.');
+            }
         }
 
         function submitGuess() {
@@ -1079,6 +1463,8 @@
             }
 
             hasSubmittedGuess = true;
+            stopTurnTimer(); // Stop the timer when guess is submitted
+            
             if (socket && roomId) {
                 socket.emit('submit-guess', { roomId, guess, playerIndex: myPlayerIndex });
             }

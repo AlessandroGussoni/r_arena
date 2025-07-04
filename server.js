@@ -322,6 +322,19 @@ io.on('connection', (socket) => {
             // Update room users list with correct socket ID at correct position
             const room = rooms.get(roomId);
             
+            // Check if this is a reconnection
+            if (room.disconnectedUser && room.disconnectedUser.index === playerIndex) {
+                console.log(`User ${socket.id} reconnecting to room ${roomId} at index ${playerIndex}`);
+                
+                // Clear disconnected user data
+                delete room.disconnectedUser;
+                
+                // Notify the other player about successful reconnection
+                socket.to(roomId).emit('partner-reconnected');
+                
+                console.log(`User ${socket.id} successfully reconnected to room ${roomId}`);
+            }
+            
             if (playerIndex !== undefined && (playerIndex === 0 || playerIndex === 1)) {
                 room.users[playerIndex] = socket.id;
                 console.log(`Updated room ${roomId} users at index ${playerIndex}: ${socket.id}`);
@@ -486,9 +499,47 @@ io.on('connection', (socket) => {
             console.log(`Removed user ${socket.id} from waiting queue`);
         }
         
-        // Don't immediately delete rooms on disconnect
-        // Users may reconnect when navigating between pages
-        console.log(`User ${socket.id} disconnected, but keeping rooms active for reconnection`);
+        // Find room where this user was playing
+        let userRoom = null;
+        let userIndex = -1;
+        
+        for (const [roomId, room] of rooms.entries()) {
+            const index = room.users.indexOf(socket.id);
+            if (index !== -1) {
+                userRoom = roomId;
+                userIndex = index;
+                break;
+            }
+        }
+        
+        if (userRoom) {
+            const room = rooms.get(userRoom);
+            console.log(`User ${socket.id} disconnected from room ${userRoom}`);
+            
+            // Mark user as disconnected but don't remove immediately
+            room.users[userIndex] = null;
+            room.disconnectedUser = {
+                id: socket.id,
+                index: userIndex,
+                disconnectTime: Date.now()
+            };
+            
+            // Notify the remaining player
+            socket.to(userRoom).emit('partner-reconnecting');
+            
+            // Set a timer to clean up the room if user doesn't reconnect
+            setTimeout(() => {
+                if (rooms.has(userRoom)) {
+                    const currentRoom = rooms.get(userRoom);
+                    if (currentRoom.disconnectedUser && currentRoom.disconnectedUser.id === socket.id) {
+                        // User didn't reconnect, notify partner and clean up
+                        console.log(`User ${socket.id} didn't reconnect to room ${userRoom}, cleaning up`);
+                        socket.to(userRoom).emit('user-disconnected');
+                        rooms.delete(userRoom);
+                    }
+                }
+            }, 30000); // 30 second grace period for reconnection
+        }
     });
     
     socket.on('submit-guess', (data) => {
