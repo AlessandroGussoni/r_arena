@@ -440,7 +440,7 @@ io.on('connection', (socket) => {
                 delete room.disconnectedUser;
                 
                 // Notify the other player about successful reconnection
-                socket.to(roomId).emit('partner-reconnected');
+                socket.to(roomId).emit('opponent-reconnected');
                 
                 console.log(`User ${socket.id} successfully reconnected to room ${roomId}`);
             }
@@ -634,7 +634,7 @@ io.on('connection', (socket) => {
             };
             
             // Notify the remaining player
-            socket.to(userRoom).emit('partner-reconnecting');
+            socket.to(userRoom).emit('opponent-reconnecting');
             
             // Set a timer to clean up the room if user doesn't reconnect
             setTimeout(() => {
