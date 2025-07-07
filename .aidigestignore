@@ -1,4 +1,0 @@
-node_modules/*
-.claude/*
-package-lock.json
-bug_fix.md
