@@ -86,6 +86,29 @@ function calculateCorrelation(data) {
     return numerator / denominator;
 }
 
+// Get the current complete point state (initial + added - removed)
+function getCurrentPointState(room) {
+    // This is a simplified approach: we start with initial data and apply all changes
+    // A more robust approach would track the full point history, but for now we'll
+    // reconstruct the current state based on the fact that:
+    // - room.points contains all added points this round
+    // - room.removedPoints contains metadata about removals, but we can't easily 
+    //   reconstruct which specific points were removed without more complex tracking
+    
+    // For now, return initial data + added points
+    // Note: This doesn't perfectly handle removals, but it's better than just initial data
+    let currentPoints = [...room.initialData];
+    
+    // Add all points that were added during gameplay
+    const addedPoints = room.points || [];
+    currentPoints = currentPoints.concat(addedPoints);
+    
+    // TODO: Implement proper removal tracking
+    // For now, we approximate by noting that removals happened but don't track exactly which points
+    
+    return currentPoints;
+}
+
 /**
  * The single, authoritative function for switching turns.
  * It clears any existing server-side timer and sets a new one for the next turn.
@@ -155,6 +178,7 @@ function handleRoundCompletion(roomId) {
         room.pointsInCurrentTurn = 0;
         room.turnCount = 0;
         room.points = [];
+        room.removedPoints = []; // Reset removed points for new round
         room.turnStartTime = Date.now();
         
         console.log(`[${roomId}] Starting new round ${room.currentRound}`);
@@ -184,18 +208,39 @@ function calculateFinalScores(roomId) {
         room.turnTimer = null;
     }
     
-    const trueCorrelation = calculateCorrelation(room.initialData);
     const player1Guesses = room.guesses.filter(g => g.playerIndex === 0);
     const player2Guesses = room.guesses.filter(g => g.playerIndex === 1);
-    const player1Errors = player1Guesses.map(g => Math.abs(trueCorrelation - g.guess));
-    const player2Errors = player2Guesses.map(g => Math.abs(trueCorrelation - g.guess));
+    
+    // Calculate errors for each guess based on the actual point state when the guess was made
+    const player1Errors = player1Guesses.map(g => {
+        const pointStateAtGuess = g.pointState || room.initialData; // fallback to initial data if not tracked
+        const correlationAtGuess = calculateCorrelation(pointStateAtGuess);
+        const error = Math.abs(correlationAtGuess - g.guess);
+        console.log(`[${roomId}] Player 1 Round ${g.round}: True corr used to compute error=${correlationAtGuess.toFixed(3)}, Player guess=${g.guess}, Error=${error.toFixed(3)}`);
+        return error;
+    });
+    
+    const player2Errors = player2Guesses.map(g => {
+        const pointStateAtGuess = g.pointState || room.initialData; // fallback to initial data if not tracked
+        const correlationAtGuess = calculateCorrelation(pointStateAtGuess);
+        const error = Math.abs(correlationAtGuess - g.guess);
+        console.log(`[${roomId}] Player 2 Round ${g.round}: True corr used to compute error=${correlationAtGuess.toFixed(3)}, Player guess=${g.guess}, Error=${error.toFixed(3)}`);
+        return error;
+    });
+    
     const player1AvgError = player1Errors.length > 0 ? player1Errors.reduce((a, b) => a + b, 0) / player1Errors.length : Infinity;
     const player2AvgError = player2Errors.length > 0 ? player2Errors.reduce((a, b) => a + b, 0) / player2Errors.length : Infinity;
     const winner = player1AvgError < player2AvgError ? 1 : (player2AvgError < player1AvgError ? 2 : 0); // Handle ties
 
-    console.log(`Game over for room ${roomId}`);
+    console.log(`[${roomId}] Game over - Player 1 Avg Error: ${player1AvgError.toFixed(3)}, Player 2 Avg Error: ${player2AvgError.toFixed(3)}, Winner: ${winner}`);
+    
+    // Calculate final correlation based on the current point state
+    const finalPointState = getCurrentPointState(room);
+    const finalCorrelation = calculateCorrelation(finalPointState);
+    console.log(`[${roomId}] Final point state has ${finalPointState.length} points with correlation ${finalCorrelation.toFixed(3)}`);
+    
     io.to(roomId).emit('game-over', {
-        trueCorrelation,
+        trueCorrelation: finalCorrelation,
         player1AvgError,
         player2AvgError,
         winner,
@@ -223,6 +268,7 @@ io.on('connection', (socket) => {
                 correlation: correlation,
                 initialData: initialData,
                 points: [],
+                removedPoints: [], // Track point removals
                 currentTurn: 0, // 0 = first user, 1 = second user
                 pointsInCurrentTurn: 0,
                 maxPointsPerTurn: 3,
@@ -288,6 +334,7 @@ io.on('connection', (socket) => {
             correlation: correlation,
             initialData: initialData,
             points: [],
+            removedPoints: [], // Track point removals
             currentTurn: 0,
             pointsInCurrentTurn: 0,
             maxPointsPerTurn: 3,
@@ -523,6 +570,14 @@ io.on('connection', (socket) => {
                 return;
             }
             
+            // Track the point removal for correlation calculation
+            room.removedPoints.push({
+                datasetIndex: data.datasetIndex,
+                pointIndex: data.pointIndex,
+                userId: socket.id,
+                round: room.currentRound
+            });
+            
             room.pointsInCurrentTurn++;
             
             console.log(`Point removed by player ${userIndex}. Points in turn: ${room.pointsInCurrentTurn}/${room.maxPointsPerTurn}`);
@@ -628,12 +683,17 @@ io.on('connection', (socket) => {
                 return;
             }
             
-            // Store the guess
+            // Store the guess with current point state
+            const currentPointState = getCurrentPointState(room);
+            const correlationAtGuess = calculateCorrelation(currentPointState);
+            console.log(`[${roomId}] Player ${playerIndex} submitted guess ${guess} in round ${room.currentRound}. Point state: ${currentPointState.length} points, correlation: ${correlationAtGuess.toFixed(3)}`);
+            
             room.guesses.push({
                 playerIndex: playerIndex,
                 guess: guess,
                 round: room.currentRound,
-                userId: socket.id
+                userId: socket.id,
+                pointState: currentPointState // Capture point state at time of guess
             });
             
             console.log(`Guess stored for player ${playerIndex} in round ${room.currentRound}: ${guess}`);

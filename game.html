@@ -1617,6 +1617,25 @@
             });
 
             socket.on('game-over', (data) => {
+                // Log true correlation, player guesses, and errors for each round
+                console.log(`Game Over - True correlation: ${data.trueCorrelation.toFixed(3)}`);
+                
+                // Log player 1 data
+                if (data.player1Guesses) {
+                    data.player1Guesses.forEach((guess, index) => {
+                        const error = Math.abs(data.trueCorrelation - guess.guess);
+                        console.log(`Player 1 Round ${guess.round}: True corr used to compute error ${data.trueCorrelation.toFixed(3)}, player guess ${guess.guess}, error ${error.toFixed(3)}`);
+                    });
+                }
+                
+                // Log player 2 data
+                if (data.player2Guesses) {
+                    data.player2Guesses.forEach((guess, index) => {
+                        const error = Math.abs(data.trueCorrelation - guess.guess);
+                        console.log(`Player 2 Round ${guess.round}: True corr used to compute error ${data.trueCorrelation.toFixed(3)}, player guess ${guess.guess}, error ${error.toFixed(3)}`);
+                    });
+                }
+                
                 showGameResult(data);
             });
 
@@ -1825,6 +1844,9 @@
                 setTimeout(hideNotification, 4000);
                 return;
             }
+
+            // Log the player guess for each turn
+            console.log(`Player ${myPlayerIndex + 1} Round ${currentRound}: player guess ${guess}`);
 
             guessInput.classList.add('submitting');
             setTimeout(() => guessInput.classList.remove('submitting'), 800);
