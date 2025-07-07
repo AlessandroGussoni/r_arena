@@ -122,9 +122,9 @@ function switchTurn(roomId, isTimeout = false) {
     });
 
     // 4. Handle round/game logic
-    // A round in the 'play' phase is complete after both players have had a turn.
-    const roundComplete = room.turnCount >= 2 && room.gamePhase === 'play';
-    if (roundComplete) {
+    // Check if both players have completed their turns (guess + moves) for this round
+    const roundGuesses = room.guesses.filter(g => g.round === room.currentRound);
+    if (room.turnCount >= 2 && roundGuesses.length === 2) {
         handleRoundCompletion(roomId);
     } else {
         // 5. Set a new server-side timer for the new turn
@@ -466,7 +466,7 @@ io.on('connection', (socket) => {
             // Check if player has reached max points for this turn
             if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
                 console.log(`User ${socket.id} tried to add point but turn limit reached`);
-                socket.emit('turn-error', { message: "You've reached your turn limit!" });
+                socket.emit('turn-error', { message: "You've reached your point move limit!" });
                 return;
             }
             
@@ -474,14 +474,9 @@ io.on('connection', (socket) => {
             room.points.push(point);
             room.pointsInCurrentTurn++;
             
-            console.log(`Point added to room ${roomId} by user ${socket.id}. Points in turn: ${room.pointsInCurrentTurn}/${room.maxPointsPerTurn}`);
+            console.log(`Point added by player ${userIndex}. Points in turn: ${room.pointsInCurrentTurn}/${room.maxPointsPerTurn}`);
             
-            // Check if turn should switch
-            if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
-                switchTurn(roomId);
-            }
-            
-            // Broadcast point to all users in room
+            // Broadcast the point addition
             io.to(roomId).emit('point-added', {
                 ...point,
                 currentTurn: room.currentTurn,
@@ -490,7 +485,11 @@ io.on('connection', (socket) => {
                 turnDuration: room.turnDuration
             });
             
-            console.log(`Point broadcasted to room ${roomId} by user ${socket.id}`);
+            // Switch turn if max points reached
+            if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
+                console.log(`Player ${userIndex} completed point moves, switching turn`);
+                switchTurn(roomId);
+            }
         } else {
             console.log(`Room ${roomId} does not exist when adding point`);
         }
@@ -507,7 +506,6 @@ io.on('connection', (socket) => {
             
             // Check if it's this player's turn
             if (userIndex !== room.currentTurn) {
-                console.log(`User ${socket.id} tried to remove point but it's not their turn. Current turn: ${room.currentTurn}, User index: ${userIndex}`);
                 socket.emit('turn-error', { message: "It's not your turn!" });
                 return;
             }
@@ -515,26 +513,19 @@ io.on('connection', (socket) => {
             // Check if player has submitted a guess for this round
             const playerGuessForRound = room.guesses.find(g => g.playerIndex === userIndex && g.round === room.currentRound);
             if (!playerGuessForRound) {
-                console.log(`User ${socket.id} tried to remove point but hasn't submitted guess for round ${room.currentRound}`);
                 socket.emit('turn-error', { message: "Please submit your correlation guess first!" });
                 return;
             }
             
             // Check if player has reached max points for this turn
             if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
-                console.log(`User ${socket.id} tried to remove point but turn limit reached`);
-                socket.emit('turn-error', { message: "You've reached your turn limit!" });
+                socket.emit('turn-error', { message: "You've reached your point move limit!" });
                 return;
             }
             
             room.pointsInCurrentTurn++;
             
-            console.log(`Point removed from room ${roomId} by user ${socket.id}. Points in turn: ${room.pointsInCurrentTurn}/${room.maxPointsPerTurn}`);
-            
-            // Check if turn should switch
-            if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
-                switchTurn(roomId);
-            }
+            console.log(`Point removed by player ${userIndex}. Points in turn: ${room.pointsInCurrentTurn}/${room.maxPointsPerTurn}`);
             
             // Broadcast point removal to all users in room
             io.to(roomId).emit('point-removed', {
@@ -545,7 +536,11 @@ io.on('connection', (socket) => {
                 turnDuration: room.turnDuration
             });
             
-            console.log(`Point removal broadcasted to room ${roomId} by user ${socket.id}`);
+            // Switch turn if max points reached
+            if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
+                console.log(`Player ${userIndex} completed point moves, switching turn`);
+                switchTurn(roomId);
+            }
         } else {
             console.log(`Room ${roomId} does not exist when removing point`);
         }
@@ -620,6 +615,19 @@ io.on('connection', (socket) => {
         if (rooms.has(roomId)) {
             const room = rooms.get(roomId);
             
+            // Verify it's the player's turn
+            if (room.currentTurn !== playerIndex) {
+                socket.emit('turn-error', { message: "It's not your turn!" });
+                return;
+            }
+            
+            // Check if player has already guessed this round
+            const existingGuess = room.guesses.find(g => g.playerIndex === playerIndex && g.round === room.currentRound);
+            if (existingGuess) {
+                socket.emit('turn-error', { message: "You've already submitted a guess for this round!" });
+                return;
+            }
+            
             // Store the guess
             room.guesses.push({
                 playerIndex: playerIndex,
@@ -630,7 +638,10 @@ io.on('connection', (socket) => {
             
             console.log(`Guess stored for player ${playerIndex} in round ${room.currentRound}: ${guess}`);
             
-            // Notify that guess was submitted
+            // Reset pointsInCurrentTurn to allow point moves in the same turn
+            room.pointsInCurrentTurn = 0;
+            
+            // Notify clients that the guess was accepted and point moves can begin
             io.to(roomId).emit('guess-submitted', {
                 playerIndex: playerIndex,
                 round: room.currentRound,
@@ -638,25 +649,18 @@ io.on('connection', (socket) => {
                 turnDuration: room.turnDuration
             });
             
-            // Check if both players have submitted guesses for this round
-            const roundGuesses = room.guesses.filter(g => g.round === room.currentRound);
-            if (roundGuesses.length < 2) {
-                // First player guessed. Switch turn for the second player to guess.
-                switchTurn(roomId);
-            } else {
-                // Second player guessed. Start the 'play' phase.
-                console.log(`[${roomId}] Both players have guessed for round ${room.currentRound}, starting play phase.`);
-                room.gamePhase = 'play';
-                room.turnCount = 0;
-                room.currentTurn = 1; // Will be switched to 0, making the first player start.
-                
-                io.to(roomId).emit('round-start', {
-                    round: room.currentRound,
-                    gamePhase: room.gamePhase,
-                });
-                
-                switchTurn(roomId); // This starts player 0's turn for the play phase.
-            }
+            // Update clients with current turn state (no phase change yet)
+            io.to(roomId).emit('turn-changed', {
+                currentTurn: room.currentTurn,
+                pointsInCurrentTurn: room.pointsInCurrentTurn,
+                turnStartTime: room.turnStartTime,
+                turnDuration: room.turnDuration
+            });
+            
+            // Restart the turn timer to give time for point moves
+            if (room.turnTimer) clearTimeout(room.turnTimer);
+            room.turnStartTime = Date.now();
+            room.turnTimer = setTimeout(() => switchTurn(roomId, true), room.turnDuration + 500);
         } else {
             console.log(`Room ${roomId} does not exist when submitting guess`);
         }
