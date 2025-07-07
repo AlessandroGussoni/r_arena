@@ -1238,30 +1238,6 @@
             }, 1000);
         }
 
-        function generateCorrelatedData(n, r) {
-            const randn_bm = () => {
-                let u = 0, v = 0;
-                while(u === 0) u = Math.random();
-                while(v === 0) v = Math.random();
-                return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
-            };
-
-            const x_norm = Array.from({length: n}, () => randn_bm());
-            const e_norm = Array.from({length: n}, () => randn_bm());
-            const y_norm = x_norm.map((val, i) => r * val + Math.sqrt(1 - r*r) * e_norm[i]);
-
-            const scale = (arr) => {
-                const min = Math.min(...arr);
-                const max = Math.max(...arr);
-                const range = max - min;
-                if (range === 0) return arr.map(() => 0);
-                return arr.map(val => ((val - min) / range) * 190 - 95);
-            };
-
-            const scaledX = scale(x_norm);
-            const scaledY = scale(y_norm);
-            return scaledX.map((val, i) => ({x: val, y: scaledY[i]}));
-        }
 
         function initChart() {
             const ctx = document.getElementById('scatterChart').getContext('2d');

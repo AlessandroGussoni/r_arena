@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
 const path = require('path');
+const { nanoid } = require('nanoid');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,7 +24,7 @@ const rooms = new Map();
 
 // Generate room ID
 function generateRoomId() {
-    return Math.random().toString(36).substr(2, 9);
+    return nanoid(9); // Generates a 9-character unique ID
 }
 
 // Generate random correlation for room
@@ -431,7 +432,17 @@ io.on('connection', (socket) => {
     socket.on('add-point', (data) => {
         console.log(`Received add-point from ${socket.id}:`, data);
         const roomId = data.roomId;
-        const point = { x: data.x, y: data.y, userId: socket.id };
+        const x = parseFloat(data.x);
+        const y = parseFloat(data.y);
+        
+        // Server-side input validation
+        if (isNaN(x) || isNaN(y) || x < -100 || x > 100 || y < -100 || y > 100) {
+            console.log(`[${roomId}] Invalid point coordinates received from ${socket.id}: x=${data.x}, y=${data.y}`);
+            socket.emit('turn-error', { message: 'Invalid point coordinates. Must be between -100 and 100.' });
+            return;
+        }
+        
+        const point = { x: x, y: y, userId: socket.id };
         
         if (rooms.has(roomId)) {
             const room = rooms.get(roomId);
@@ -596,8 +607,15 @@ io.on('connection', (socket) => {
     socket.on('submit-guess', (data) => {
         console.log(`Received guess from ${socket.id}:`, data);
         const roomId = data.roomId;
-        const guess = data.guess;
+        const guess = parseFloat(data.guess);
         const playerIndex = data.playerIndex;
+        
+        // Server-side input validation
+        if (isNaN(guess) || guess < -1 || guess > 1) {
+            console.log(`[${roomId}] Invalid guess received from ${socket.id}: ${data.guess}`);
+            socket.emit('turn-error', { message: 'Invalid guess value. Must be between -1 and 1.' });
+            return;
+        }
         
         if (rooms.has(roomId)) {
             const room = rooms.get(roomId);
