@@ -85,6 +85,31 @@ function calculateCorrelation(data) {
     return numerator / denominator;
 }
 
+// Add this function somewhere before the io.on('connection', ...) block
+function switchTurn(roomId, room) {
+    room.currentTurn = 1 - room.currentTurn;
+    room.pointsInCurrentTurn = 0;
+    room.turnCount++;
+    room.turnStartTime = Date.now(); // Record when new turn started
+    console.log(`Turn switched to player ${room.currentTurn}. Total turns: ${room.turnCount}`);
+
+    const roundComplete = room.turnCount >= 2;
+    
+    // Broadcast the standard turn change event
+    io.to(roomId).emit('turn-changed', {
+        currentTurn: room.currentTurn,
+        pointsInCurrentTurn: room.pointsInCurrentTurn,
+        roundComplete: roundComplete,
+        turnStartTime: room.turnStartTime,
+        turnDuration: room.turnDuration
+    });
+    
+    // Handle end of round if necessary
+    if (roundComplete) {
+        handleRoundCompletion(roomId);
+    }
+}
+
 // Handle round completion and progression
 function handleRoundCompletion(roomId) {
     if (!rooms.has(roomId)) {
@@ -105,6 +130,7 @@ function handleRoundCompletion(roomId) {
         room.pointsInCurrentTurn = 0;
         room.turnCount = 0; // Reset turn counter for new round
         room.points = []; // Reset points for next round
+        room.turnStartTime = Date.now(); // Start timer for new round
         
         console.log(`Starting new round ${room.currentRound}`);
         
@@ -112,7 +138,9 @@ function handleRoundCompletion(roomId) {
         io.to(roomId).emit('new-round', {
             currentRound: room.currentRound,
             gamePhase: room.gamePhase,
-            currentTurn: room.currentTurn
+            currentTurn: room.currentTurn,
+            turnStartTime: room.turnStartTime,
+            turnDuration: room.turnDuration
         });
     }
 }
@@ -189,12 +217,17 @@ io.on('connection', (socket) => {
                 gamePhase: 'guess', // 'guess' or 'play'
                 guesses: [], // Array to store all guesses with rounds
                 roundsCompleted: 0,
-                turnCount: 0 // Track total turns completed
+                turnCount: 0, // Track total turns completed
+                turnStartTime: null, // Track when current turn started
+                turnDuration: 20000 // 20 seconds per turn in milliseconds
             });
             
             // Join both users to room
             waitingUser.join(roomId);
             socket.join(roomId);
+            
+            // Set initial turn start time
+            rooms.get(roomId).turnStartTime = Date.now();
             
             // Send room info to both users
             const roomData = {
@@ -208,7 +241,9 @@ io.on('connection', (socket) => {
                 currentRound: 1,
                 maxRounds: 3,
                 gamePhase: 'guess',
-                playerIndex: { [waitingUser.id]: 0, [socket.id]: 1 }
+                playerIndex: { [waitingUser.id]: 0, [socket.id]: 1 },
+                turnStartTime: rooms.get(roomId).turnStartTime,
+                turnDuration: rooms.get(roomId).turnDuration
             };
             
             waitingUser.emit('room-matched', roomData);
@@ -244,7 +279,9 @@ io.on('connection', (socket) => {
             guesses: [],
             roundsCompleted: 0,
             turnCount: 0,
-            createdBy: socket.id
+            createdBy: socket.id,
+            turnStartTime: null,
+            turnDuration: 20000
         });
         
         socket.join(roomId);
@@ -284,6 +321,9 @@ io.on('connection', (socket) => {
         
         // If room is now full, start the game
         if (room.users[0] && room.users[1]) {
+            // Set initial turn start time
+            room.turnStartTime = Date.now();
+            
             const roomData = {
                 roomId: roomId,
                 correlation: room.correlation,
@@ -295,7 +335,9 @@ io.on('connection', (socket) => {
                 currentRound: 1,
                 maxRounds: 3,
                 gamePhase: 'guess',
-                playerIndex: { [room.users[0]]: 0, [room.users[1]]: 1 }
+                playerIndex: { [room.users[0]]: 0, [room.users[1]]: 1 },
+                turnStartTime: room.turnStartTime,
+                turnDuration: room.turnDuration
             };
             
             // Send to both users
@@ -342,6 +384,22 @@ io.on('connection', (socket) => {
             
             console.log(`User ${socket.id} successfully joined room ${roomId}`);
             console.log(`Room ${roomId} users:`, room.users);
+            
+            // Send current game state to reconnecting user
+            socket.emit('game-state-sync', {
+                roomId: roomId,
+                currentTurn: room.currentTurn,
+                pointsInCurrentTurn: room.pointsInCurrentTurn,
+                maxPointsPerTurn: room.maxPointsPerTurn,
+                currentRound: room.currentRound,
+                maxRounds: room.maxRounds,
+                gamePhase: room.gamePhase,
+                points: room.points,
+                turnStartTime: room.turnStartTime,
+                turnDuration: room.turnDuration,
+                turnCount: room.turnCount,
+                guesses: room.guesses
+            });
         } else {
             console.log(`Room ${roomId} does not exist for user ${socket.id}`);
         }
@@ -386,31 +444,16 @@ io.on('connection', (socket) => {
             
             // Check if turn should switch
             if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
-                room.currentTurn = 1 - room.currentTurn; // Switch turn (0->1, 1->0)
-                room.pointsInCurrentTurn = 0;
-                room.turnCount++;
-                console.log(`Turn switched to player ${room.currentTurn}. Total turns: ${room.turnCount}`);
-                
-                // Check if both players have completed their turns for this round (2 turns per round)
-                const roundComplete = room.turnCount >= 2;
-                
-                // Broadcast turn change to all users in room
-                io.to(roomId).emit('turn-changed', {
-                    currentTurn: room.currentTurn,
-                    pointsInCurrentTurn: room.pointsInCurrentTurn,
-                    roundComplete: roundComplete
-                });
-                
-                if (roundComplete) {
-                    handleRoundCompletion(roomId);
-                }
+                switchTurn(roomId, room);
             }
             
             // Broadcast point to all users in room
             io.to(roomId).emit('point-added', {
                 ...point,
                 currentTurn: room.currentTurn,
-                pointsInCurrentTurn: room.pointsInCurrentTurn
+                pointsInCurrentTurn: room.pointsInCurrentTurn,
+                turnStartTime: room.turnStartTime,
+                turnDuration: room.turnDuration
             });
             
             console.log(`Point broadcasted to room ${roomId} by user ${socket.id}`);
@@ -456,31 +499,16 @@ io.on('connection', (socket) => {
             
             // Check if turn should switch
             if (room.pointsInCurrentTurn >= room.maxPointsPerTurn) {
-                room.currentTurn = 1 - room.currentTurn; // Switch turn (0->1, 1->0)
-                room.pointsInCurrentTurn = 0;
-                room.turnCount++;
-                console.log(`Turn switched to player ${room.currentTurn}. Total turns: ${room.turnCount}`);
-                
-                // Check if both players have completed their turns for this round (2 turns per round)
-                const roundComplete = room.turnCount >= 2;
-                
-                // Broadcast turn change to all users in room
-                io.to(roomId).emit('turn-changed', {
-                    currentTurn: room.currentTurn,
-                    pointsInCurrentTurn: room.pointsInCurrentTurn,
-                    roundComplete: roundComplete
-                });
-                
-                if (roundComplete) {
-                    handleRoundCompletion(roomId);
-                }
+                switchTurn(roomId, room);
             }
             
             // Broadcast point removal to all users in room
             io.to(roomId).emit('point-removed', {
                 ...removeData,
                 currentTurn: room.currentTurn,
-                pointsInCurrentTurn: room.pointsInCurrentTurn
+                pointsInCurrentTurn: room.pointsInCurrentTurn,
+                turnStartTime: room.turnStartTime,
+                turnDuration: room.turnDuration
             });
             
             console.log(`Point removal broadcasted to room ${roomId} by user ${socket.id}`);
@@ -564,7 +592,9 @@ io.on('connection', (socket) => {
             // Notify that guess was submitted
             io.to(roomId).emit('guess-submitted', {
                 playerIndex: playerIndex,
-                round: room.currentRound
+                round: room.currentRound,
+                turnStartTime: room.turnStartTime,
+                turnDuration: room.turnDuration
             });
             
             // Check if both players have submitted guesses for this round
@@ -574,11 +604,33 @@ io.on('connection', (socket) => {
                 room.gamePhase = 'play';
                 io.to(roomId).emit('round-start', {
                     round: room.currentRound,
-                    gamePhase: room.gamePhase
+                    gamePhase: room.gamePhase,
+                    turnStartTime: room.turnStartTime,
+                    turnDuration: room.turnDuration
                 });
             }
         } else {
             console.log(`Room ${roomId} does not exist when submitting guess`);
+        }
+    });
+    
+    socket.on('force-turn-switch', (data) => {
+        console.log(`Received force-turn-switch from ${socket.id}:`, data);
+        const roomId = data.roomId;
+        
+        if (rooms.has(roomId)) {
+            const room = rooms.get(roomId);
+            const userIndex = room.users.indexOf(socket.id);
+            
+            // Verify it's the current player's turn
+            if (userIndex === room.currentTurn) {
+                console.log(`Force switching turn due to timeout for player ${userIndex} in room ${roomId}`);
+                switchTurn(roomId, room);
+            } else {
+                console.log(`User ${socket.id} tried to force turn switch but it's not their turn`);
+            }
+        } else {
+            console.log(`Room ${roomId} does not exist when forcing turn switch`);
         }
     });
     

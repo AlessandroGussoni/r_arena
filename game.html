@@ -1460,7 +1460,7 @@
             return;
         }
 
-        function updateTurnDisplay() {
+        function updateTurnDisplay(serverTurnStartTime = null, serverTurnDuration = 20000) {
             const isMyTurn = currentTurn === myPlayerIndex;
             const pointsLeft = maxPointsPerTurn - pointsInCurrentTurn;
             const turnElement = document.getElementById('turnInfo');
@@ -1475,11 +1475,11 @@
             const guessSection = document.getElementById('guessSection');
             if (gamePhase === 'guess' && isMyTurn && !hasSubmittedGuess) {
                 guessSection.style.display = 'block';
-                startTurnTimer();
+                startTurnTimer(serverTurnStartTime, serverTurnDuration);
             } else {
                 guessSection.style.display = 'none';
                 if (isMyTurn && gamePhase === 'play') {
-                    startTurnTimer();
+                    startTurnTimer(serverTurnStartTime, serverTurnDuration);
                 } else {
                     stopTurnTimer();
                 }
@@ -1546,6 +1546,10 @@
             maxPointsPerTurn = parseInt(urlParams.get('maxPointsPerTurn') || '3');
             currentRound = parseInt(urlParams.get('currentRound') || '1');
             gamePhase = urlParams.get('gamePhase') || 'guess';
+            
+            // Get timer data from URL parameters
+            const turnStartTime = urlParams.get('turnStartTime') ? parseInt(urlParams.get('turnStartTime')) : null;
+            const turnDuration = urlParams.get('turnDuration') ? parseInt(urlParams.get('turnDuration')) : 20000;
 
             if (!roomId || isNaN(targetCorrelation) || myPlayerIndex === -1) {
                 window.location.href = '/welcome.html';
@@ -1568,7 +1572,7 @@
 
             initChart();
             updateStats();
-            updateTurnDisplay();
+            updateTurnDisplay(turnStartTime, turnDuration);
 
             socket = io();
             socket.on('connect', () => {
@@ -1583,7 +1587,7 @@
                 if (point.currentTurn !== undefined) {
                     currentTurn = point.currentTurn;
                     pointsInCurrentTurn = point.pointsInCurrentTurn;
-                    updateTurnDisplay();
+                    updateTurnDisplay(point.turnStartTime, point.turnDuration);
                 }
             });
 
@@ -1594,33 +1598,33 @@
                 if (data.currentTurn !== undefined) {
                     currentTurn = data.currentTurn;
                     pointsInCurrentTurn = data.pointsInCurrentTurn;
-                    updateTurnDisplay();
+                    updateTurnDisplay(data.turnStartTime, data.turnDuration);
                 }
             });
 
             socket.on('turn-changed', (turnData) => {
                 currentTurn = turnData.currentTurn;
                 pointsInCurrentTurn = turnData.pointsInCurrentTurn;
-                updateTurnDisplay();
+                updateTurnDisplay(turnData.turnStartTime, turnData.turnDuration);
             });
 
             socket.on('force-turn-switched', (turnData) => {
                 currentTurn = turnData.currentTurn;
                 pointsInCurrentTurn = turnData.pointsInCurrentTurn;
                 stopTurnTimer();
-                updateTurnDisplay();
+                updateTurnDisplay(turnData.turnStartTime, turnData.turnDuration);
             });
 
             socket.on('guess-submitted', (data) => {
                 if (data.playerIndex !== myPlayerIndex && hasSubmittedGuess) {
                     gamePhase = 'play';
-                    updateTurnDisplay();
+                    updateTurnDisplay(data.turnStartTime, data.turnDuration);
                 }
             });
 
             socket.on('round-start', (data) => {
                 gamePhase = 'play';
-                updateTurnDisplay();
+                updateTurnDisplay(data.turnStartTime, data.turnDuration);
             });
 
             socket.on('new-round', (data) => {
@@ -1633,7 +1637,7 @@
                 document.getElementById('submitGuessBtn').disabled = false;
                 document.getElementById('correlationGuess').value = '';
                 stopTurnTimer();
-                updateTurnDisplay();
+                updateTurnDisplay(data.turnStartTime, data.turnDuration);
             });
 
             socket.on('game-over', (data) => {
@@ -1673,6 +1677,40 @@
                 }, 3000);
             });
 
+            // Handle game state sync for reconnecting users
+            socket.on('game-state-sync', (stateData) => {
+                console.log('Received game state sync:', stateData);
+                currentTurn = stateData.currentTurn;
+                pointsInCurrentTurn = stateData.pointsInCurrentTurn;
+                maxPointsPerTurn = stateData.maxPointsPerTurn;
+                currentRound = stateData.currentRound;
+                maxRounds = stateData.maxRounds;
+                gamePhase = stateData.gamePhase;
+                
+                // Restore points to the chart
+                if (stateData.points && stateData.points.length > 0) {
+                    stateData.points.forEach(point => {
+                        if (point.userId === socket.id) {
+                            chart.data.datasets[1].data.push({x: point.x, y: point.y});
+                        } else {
+                            chart.data.datasets[2].data.push({x: point.x, y: point.y});
+                        }
+                    });
+                    chart.update();
+                }
+                
+                // Check if user has submitted guess for current round
+                if (stateData.guesses && stateData.guesses.length > 0) {
+                    const myGuess = stateData.guesses.find(g => g.userId === socket.id && g.round === currentRound);
+                    if (myGuess) {
+                        hasSubmittedGuess = true;
+                        document.getElementById('correlationGuess').value = myGuess.guess;
+                    }
+                }
+                
+                updateTurnDisplay(stateData.turnStartTime, stateData.turnDuration);
+            });
+
             // Handle socket disconnect/reconnect events
             socket.on('disconnect', (reason) => {
                 if (reason === 'io server disconnect') {
@@ -1708,9 +1746,18 @@
             });
         }
 
-        function startTurnTimer() {
+        function startTurnTimer(serverTurnStartTime = null, serverTurnDuration = 20000) {
             stopTurnTimer(); // Clear any existing timer
-            turnTimeLeft = 20;
+            
+            // Calculate remaining time based on server data
+            if (serverTurnStartTime) {
+                const elapsed = Date.now() - serverTurnStartTime;
+                const remainingMs = Math.max(0, serverTurnDuration - elapsed);
+                turnTimeLeft = Math.ceil(remainingMs / 1000);
+            } else {
+                turnTimeLeft = 20;
+            }
+            
             updateTimerDisplay();
             showTimerBar();
             
