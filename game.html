@@ -1374,16 +1374,18 @@
                     },
                     onClick: (event, elements) => {
                         if (!hasSubmittedGuess) {
-                            alert('Please submit your correlation guess first!');
+                            showNotification('warning', 'Guess Required', 'Please submit your correlation guess first!');
+                            setTimeout(hideNotification, 3000);
                             return;
                         }
 
                         if (!canPerformAction()) {
                             if (gamePhase !== 'play') {
-                                alert('Game phase is not active!');
+                                showNotification('warning', 'Game Phase', 'Game phase is not active!');
                             } else {
-                                alert(currentTurn === myPlayerIndex ? 'You\'ve reached your turn limit! Wait for your partner.' : 'It\'s not your turn!');
+                                showNotification('warning', 'Turn Limit', currentTurn === myPlayerIndex ? 'You\'ve reached your turn limit! Wait for your partner.' : 'It\'s not your turn!');
                             }
+                            setTimeout(hideNotification, 3000);
                             return;
                         }
 
@@ -1602,23 +1604,21 @@
                 }
             });
 
+            // This is now the ONLY event that updates the turn on the client.
             socket.on('turn-changed', (turnData) => {
+                console.log('Received authoritative turn-changed from server:', turnData);
                 currentTurn = turnData.currentTurn;
-                pointsInCurrentTurn = turnData.pointsInCurrentTurn;
+                pointsInCurrentTurn = 0; // Reset local counter
                 updateTurnDisplay(turnData.turnStartTime, turnData.turnDuration);
             });
 
-            socket.on('force-turn-switched', (turnData) => {
-                currentTurn = turnData.currentTurn;
-                pointsInCurrentTurn = turnData.pointsInCurrentTurn;
-                stopTurnTimer();
-                updateTurnDisplay(turnData.turnStartTime, turnData.turnDuration);
-            });
+            // This listener is no longer needed as the server never emits it.
+            // socket.on('force-turn-switched', (turnData) => { ... });
 
             socket.on('guess-submitted', (data) => {
-                if (data.playerIndex !== myPlayerIndex && hasSubmittedGuess) {
-                    gamePhase = 'play';
-                    updateTurnDisplay(data.turnStartTime, data.turnDuration);
+                // This event is now just for feedback, not for changing game state.
+                if (data.playerIndex !== myPlayerIndex && !hasSubmittedGuess) {
+                    // e.g., show a message "Partner has submitted their guess"
                 }
             });
 
@@ -1645,7 +1645,8 @@
             });
 
             socket.on('turn-error', (error) => {
-                alert(error.message);
+                showNotification('warning', 'Turn Error', error.message);
+                setTimeout(hideNotification, 3000);
             });
 
             socket.on('user-disconnected', () => {
@@ -1821,19 +1822,20 @@
 
         function handleTurnTimeout() {
             stopTurnTimer();
-            
+            console.log("Client-side timer expired. Waiting for server to update turn.");
+
+            // The client no longer tells the server to switch turns.
+            // It only handles client-side UX, like auto-submitting a guess.
+            // The blocking `alert()` is removed.
+
             if (gamePhase === 'guess' && !hasSubmittedGuess) {
-                // Auto-submit 0 as guess if time runs out during guess phase
+                // Auto-submit 0 as a guess if time runs out. This is good UX.
                 const guessInput = document.getElementById('correlationGuess');
                 guessInput.value = '0';
                 submitGuess();
-                alert('Time\'s up! Your guess has been set to 0.');
-            } else if (gamePhase === 'play' && currentTurn === myPlayerIndex) {
-                // Force turn switch if time runs out during play phase
-                if (socket && roomId) {
-                    socket.emit('force-turn-switch', { roomId });
-                }
-                alert('Time\'s up! Your turn has ended.');
+                // Use a non-blocking notification instead of an alert.
+                showNotification('warning', 'Time Expired', 'Your guess was automatically submitted as 0.');
+                setTimeout(hideNotification, 4000);
             }
         }
 
@@ -1841,34 +1843,29 @@
             const guessInput = document.getElementById('correlationGuess');
             let guess = parseFloat(guessInput.value);
 
-            // Debug logging
-            console.log('Input value:', guessInput.value);
-            console.log('Parsed guess:', guess);
-            console.log('Is valid:', !isNaN(guess) && guess >= -1 && guess <= 1);
-
             if (isNaN(guess) || guess < -1 || guess > 1) {
-                alert(`Please enter a valid correlation between -1 and 1. Current value: "${guessInput.value}" (parsed as: ${guess})`);
+                // Use non-blocking notification for errors too.
+                showNotification('warning', 'Invalid Input', 'Please enter a number between -1 and 1.');
+                setTimeout(hideNotification, 4000);
                 return;
             }
 
-            // Add submit animation
             guessInput.classList.add('submitting');
-            
-            // Remove animation after it completes
-            setTimeout(() => {
-                guessInput.classList.remove('submitting');
-            }, 800);
+            setTimeout(() => guessInput.classList.remove('submitting'), 800);
 
             hasSubmittedGuess = true;
-            stopTurnTimer(); // Stop the timer when guess is submitted
+            // Stop the client-side timer immediately for better responsiveness.
+            // The server will soon send a `turn-changed` event to confirm.
+            stopTurnTimer();
             
             if (socket && roomId) {
                 socket.emit('submit-guess', { roomId, guess, playerIndex: myPlayerIndex });
             }
 
-            updateTurnDisplay();
             guessInput.disabled = true;
             document.getElementById('submitGuessBtn').disabled = true;
+            // The updateTurnDisplay() call is removed from here. It will be triggered
+            // by the 'turn-changed' event from the server.
         }
 
         window.addEventListener('load', () => {
