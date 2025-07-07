@@ -216,21 +216,134 @@
 
         #correlationGuess {
             width: 120px;
-            padding: 8px 12px;
+            padding: 10px 14px;
             margin: 0 10px;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
             font-size: 14px;
             text-align: center;
-            transition: all 0.3s ease;
-            background: white;
+            transition: all 0.2s ease;
+            background: #ffffff;
+            font-weight: 500;
+            appearance: none;
+            -moz-appearance: textfield;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* Remove arrows from number input */
+        #correlationGuess::-webkit-outer-spin-button,
+        #correlationGuess::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        #correlationGuess:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
         }
 
         #correlationGuess:focus {
             outline: none;
-            border-color: #000;
-            box-shadow: 0 0 0 3px rgba(0,0,0,0.1);
-            transform: translateY(-1px);
+            border-color: #64748b;
+            box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.15);
+        }
+
+        #correlationGuess.typing {
+            animation: typing 0.3s ease-out;
+        }
+
+        @keyframes typing {
+            0% {
+                border-color: #64748b;
+            }
+            50% {
+                border-color: #475569;
+            }
+            100% {
+                border-color: #64748b;
+            }
+        }
+
+        /* Green styling for positive values */
+        #correlationGuess.positive {
+            border-color: #10b981;
+            background: #f0fdf4;
+            color: #047857;
+        }
+
+        #correlationGuess.positive:hover {
+            border-color: #059669;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+        }
+
+        #correlationGuess.positive:focus {
+            border-color: #059669;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+
+        /* Red styling for negative/zero values */
+        #correlationGuess.negative {
+            border-color: #ef4444;
+            background: #fef2f2;
+            color: #dc2626;
+        }
+
+        #correlationGuess.negative:hover {
+            border-color: #dc2626;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+        }
+
+        #correlationGuess.negative:focus {
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+        }
+
+        /* Invalid input styling */
+        #correlationGuess.invalid {
+            border-color: #f59e0b;
+            background: #fffbeb;
+            color: #d97706;
+        }
+
+        #correlationGuess.invalid:hover {
+            border-color: #d97706;
+            box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+        }
+
+        #correlationGuess.invalid:focus {
+            border-color: #d97706;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+        }
+
+        #correlationGuess.submitting {
+            animation: submitPulse 0.4s ease-out;
+            background: #10b981;
+            color: white;
+            border-color: #047857;
+        }
+
+        @keyframes submitPulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.2);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+
+        #correlationGuess:disabled {
+            background: #f1f5f9;
+            color: #9ca3af;
+            border-color: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .mode-btn {
@@ -764,7 +877,7 @@
         <div class="header">
             <h1>R Arena</h1>
             <p>Room: <span id="roomId">-</span> | Players: <span id="playerCount">-</span></p>
-            <p><strong>Turn: <span id="turnInfo">-</span> | Round: <span id="roundInfo">-</span></strong></p>
+            <p><span id="turnInfo">-</span> | Round: <span id="roundInfo">-</span></strong></p>
             <p><strong>Points left: <span id="pointsLeft">-</span> | Time: <span id="timerDisplay">-</span></strong></p>
         </div>
 
@@ -1673,10 +1786,23 @@
             const guessInput = document.getElementById('correlationGuess');
             const guess = parseFloat(guessInput.value);
 
+            // Debug logging
+            console.log('Input value:', guessInput.value);
+            console.log('Parsed guess:', guess);
+            console.log('Is valid:', !isNaN(guess) && guess >= -1 && guess <= 1);
+
             if (isNaN(guess) || guess < -1 || guess > 1) {
-                alert('Please enter a valid correlation between -1 and 1');
+                alert(`Please enter a valid correlation between -1 and 1. Current value: "${guessInput.value}" (parsed as: ${guess})`);
                 return;
             }
+
+            // Add submit animation
+            guessInput.classList.add('submitting');
+            
+            // Remove animation after it completes
+            setTimeout(() => {
+                guessInput.classList.remove('submitting');
+            }, 800);
 
             hasSubmittedGuess = true;
             stopTurnTimer(); // Stop the timer when guess is submitted
@@ -1695,6 +1821,46 @@
             const statsCanvas = document.getElementById('statsCanvas');
             if (statsCanvas) {
                 const background = new StatisticalBackground(statsCanvas);
+            }
+            
+            // Add typing animation and color changes to correlation guess input
+            const correlationGuess = document.getElementById('correlationGuess');
+            if (correlationGuess) {
+                correlationGuess.addEventListener('input', function() {
+                    // Add typing animation
+                    this.classList.add('typing');
+                    setTimeout(() => {
+                        this.classList.remove('typing');
+                    }, 300);
+                    
+                    // Update color based on value
+                    updateGuessColor(this);
+                });
+                
+                // Also update color on blur
+                correlationGuess.addEventListener('blur', function() {
+                    updateGuessColor(this);
+                });
+            }
+            
+            function updateGuessColor(input) {
+                const value = parseFloat(input.value);
+                
+                // Remove existing color classes
+                input.classList.remove('positive', 'negative', 'invalid');
+                
+                if (input.value === '' || input.value === '-' || input.value === '.') {
+                    // Empty or partial input - no color
+                    return;
+                }
+                
+                if (!isNaN(value)) {
+                    if (value > 0) {
+                        input.classList.add('positive');
+                    } else {
+                        input.classList.add('negative');
+                    }
+                }
             }
             
             // Then initialize game
