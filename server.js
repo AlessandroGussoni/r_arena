@@ -296,7 +296,6 @@ io.on('connection', (socket) => {
             // Send room info to both users
             const roomData = {
                 roomId: roomId,
-                correlation: correlation,
                 initialData: initialData,
                 users: 2,
                 currentTurn: 0,
@@ -355,7 +354,6 @@ io.on('connection', (socket) => {
         // Send room info to creator
         socket.emit('room-created', {
             roomId: roomId,
-            correlation: correlation,
             initialData: initialData
         });
         
@@ -397,7 +395,6 @@ io.on('connection', (socket) => {
             
             const roomData = {
                 roomId: roomId,
-                correlation: room.correlation,
                 initialData: room.initialData,
                 users: 2,
                 currentTurn: 0,

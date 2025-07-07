@@ -947,7 +947,7 @@
             setTimeout(() => {
                 const initialDataParam = encodeURIComponent(JSON.stringify(roomData.initialData));
                 const playerIndex = roomData.playerIndex[socket.id];
-                window.location.href = `/game.html?room=${roomData.roomId}&correlation=${roomData.correlation}&initialData=${initialDataParam}&playerIndex=${playerIndex}&currentTurn=${roomData.currentTurn}&pointsInCurrentTurn=${roomData.pointsInCurrentTurn}&maxPointsPerTurn=${roomData.maxPointsPerTurn}&turnStartTime=${roomData.turnStartTime}&turnDuration=${roomData.turnDuration}`;
+                window.location.href = `/game.html?room=${roomData.roomId}&initialData=${initialDataParam}&playerIndex=${playerIndex}&currentTurn=${roomData.currentTurn}&pointsInCurrentTurn=${roomData.pointsInCurrentTurn}&maxPointsPerTurn=${roomData.maxPointsPerTurn}&turnStartTime=${roomData.turnStartTime}&turnDuration=${roomData.turnDuration}`;
             }, 1000);
         });
 

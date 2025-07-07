@@ -1516,7 +1516,6 @@
         function initializeGame() {
             const urlParams = new URLSearchParams(window.location.search);
             roomId = urlParams.get('room');
-            targetCorrelation = parseFloat(urlParams.get('correlation'));
             const initialDataParam = urlParams.get('initialData');
             myPlayerIndex = parseInt(urlParams.get('playerIndex') || '-1');
             currentTurn = parseInt(urlParams.get('currentTurn') || '0');
@@ -1529,7 +1528,7 @@
             const turnStartTime = urlParams.get('turnStartTime') ? parseInt(urlParams.get('turnStartTime')) : null;
             const turnDuration = urlParams.get('turnDuration') ? parseInt(urlParams.get('turnDuration')) : 20000;
 
-            if (!roomId || isNaN(targetCorrelation) || myPlayerIndex === -1) {
+            if (!roomId || myPlayerIndex === -1) {
                 window.location.href = '/welcome.html';
                 return;
             }
@@ -1540,11 +1539,17 @@
             if (initialDataParam) {
                 try {
                     initialData = JSON.parse(decodeURIComponent(initialDataParam));
+                    // Calculate target correlation from the initial data points
+                    targetCorrelation = calculateCorrelation(initialData);
                 } catch (e) {
                     console.error('Error parsing initial data:', e);
+                    // Fallback: generate data with a random correlation
+                    targetCorrelation = Math.random() * 1.4 - 0.7;
                     initialData = generateCorrelatedData(initialPoints, targetCorrelation);
                 }
             } else {
+                // Fallback: generate data with a random correlation
+                targetCorrelation = Math.random() * 1.4 - 0.7;
                 initialData = generateCorrelatedData(initialPoints, targetCorrelation);
             }
 
