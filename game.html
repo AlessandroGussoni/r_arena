@@ -1172,10 +1172,18 @@
                     
                     <div class="score-container">
                         <div class="score-item">
+                            <span class="score-label">True Correlation:</span>
+                            <div class="score-value-container">
+                                <span class="score-value">
+                                    ${data.trueCorrelation.toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="score-item">
                             <span class="score-label">Your Average Error:</span>
                             <div class="score-value-container">
                                 <span class="score-value">
-                                    ${(myPlayerIndex === 0 ? data.player1AvgError : data.player2AvgError).toFixed(4)}
+                                    ${(myPlayerIndex === 0 ? data.player1AvgError : data.player2AvgError).toFixed(2)}
                                 </span>
                                 ${data.winner === myPlayerIndex + 1 ? '<span class="winner-badge">Winner!</span>' : ''}
                             </div>
@@ -1184,7 +1192,7 @@
                             <span class="score-label">Partner's Average Error:</span>
                             <div class="score-value-container">
                                 <span class="score-value">
-                                    ${(myPlayerIndex === 0 ? data.player2AvgError : data.player1AvgError).toFixed(4)}
+                                    ${(myPlayerIndex === 0 ? data.player2AvgError : data.player1AvgError).toFixed(2)}
                                 </span>
                                 ${data.winner !== myPlayerIndex + 1 ? '<span class="winner-badge">Winner!</span>' : ''}
                             </div>
@@ -1784,7 +1792,7 @@
 
         function submitGuess() {
             const guessInput = document.getElementById('correlationGuess');
-            const guess = parseFloat(guessInput.value);
+            let guess = parseFloat(guessInput.value);
 
             // Debug logging
             console.log('Input value:', guessInput.value);
@@ -1827,6 +1835,15 @@
             const correlationGuess = document.getElementById('correlationGuess');
             if (correlationGuess) {
                 correlationGuess.addEventListener('input', function() {
+                    // Restrict to 2 decimal places
+                    let value = this.value;
+                    if (value.includes('.')) {
+                        const parts = value.split('.');
+                        if (parts[1] && parts[1].length > 2) {
+                            this.value = parts[0] + '.' + parts[1].substring(0, 2);
+                        }
+                    }
+                    
                     // Add typing animation
                     this.classList.add('typing');
                     setTimeout(() => {
