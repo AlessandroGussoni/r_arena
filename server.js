@@ -282,15 +282,15 @@ io.on('connection', (socket) => {
                 turnDuration: 20000, // 20 seconds per turn in milliseconds
                 turnTimer: null // Initialize timer property
             };
-            rooms.set(roomId, room);
+            rooms.set(roomId.toLowerCase(), room);
             
             // Join both users to room
-            waitingUser.join(roomId);
-            socket.join(roomId);
+            waitingUser.join(roomId.toLowerCase());
+            socket.join(roomId.toLowerCase());
             
             // Start the first timer for the guess phase
             room.turnTimer = setTimeout(() => {
-                switchTurn(roomId, true);
+                switchTurn(roomId.toLowerCase(), true);
             }, room.turnDuration + 500);
             
             // Send room info to both users
@@ -328,7 +328,7 @@ io.on('connection', (socket) => {
         const initialData = generateCorrelatedData(10, correlation);
         
         // Create room with only one user initially
-        rooms.set(roomId, {
+        rooms.set(roomId.toLowerCase(), {
             users: [socket.id, null], // Second slot empty for friend to join
             correlation: correlation,
             initialData: initialData,
@@ -349,7 +349,7 @@ io.on('connection', (socket) => {
             turnTimer: null // Initialize timer property
         });
         
-        socket.join(roomId);
+        socket.join(roomId.toLowerCase());
         
         // Send room info to creator
         socket.emit('room-created', {
