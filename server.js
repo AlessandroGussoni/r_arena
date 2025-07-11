@@ -280,7 +280,9 @@ io.on('connection', (socket) => {
                 turnCount: 0, // Track total turns completed
                 turnStartTime: Date.now(), // Track when current turn started
                 turnDuration: 20000, // 20 seconds per turn in milliseconds
-                turnTimer: null // Initialize timer property
+                turnTimer: null, // Initialize timer property
+                playerNames: {}, // Store player names by socket ID
+                gameStarted: false // Track if game has actually started
             };
             rooms.set(roomId.toLowerCase(), room);
             
@@ -288,10 +290,7 @@ io.on('connection', (socket) => {
             waitingUser.join(roomId.toLowerCase());
             socket.join(roomId.toLowerCase());
             
-            // Start the first timer for the guess phase
-            room.turnTimer = setTimeout(() => {
-                switchTurn(roomId.toLowerCase(), true);
-            }, room.turnDuration + 500);
+            // Don't start timer yet - wait for both players to input names
             
             // Send room info to both users
             const roomData = {
@@ -346,7 +345,8 @@ io.on('connection', (socket) => {
             createdBy: socket.id,
             turnStartTime: null,
             turnDuration: 20000,
-            turnTimer: null // Initialize timer property
+            turnTimer: null, // Initialize timer property
+            playerNames: {} // Store player names by socket ID
         });
         
         socket.join(roomId.toLowerCase());
@@ -383,15 +383,10 @@ io.on('connection', (socket) => {
         
         socket.join(roomId);
         
-        // If room is now full, start the game
+        // If room is now full, prepare the game but don't start timer
         if (room.users[0] && room.users[1]) {
-            // Set initial turn start time
-            room.turnStartTime = Date.now();
-            
-            // Start the first timer for the guess phase
-            room.turnTimer = setTimeout(() => {
-                switchTurn(roomId, true);
-            }, room.turnDuration + 500);
+            // Initialize game started flag - timer will start when both players provide names
+            room.gameStarted = false;
             
             const roomData = {
                 roomId: roomId,
@@ -404,7 +399,6 @@ io.on('connection', (socket) => {
                 maxRounds: 3,
                 gamePhase: 'guess',
                 playerIndex: { [room.users[0]]: 0, [room.users[1]]: 1 },
-                turnStartTime: room.turnStartTime,
                 turnDuration: room.turnDuration
             };
             
@@ -422,7 +416,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('join-room', (data) => {
-        const roomId = data.roomId || data; // Handle both string and object
+        const roomId = (data.roomId || data).toLowerCase(); // Handle both string and object, convert to lowercase
         const playerIndex = data.playerIndex;
         
         console.log(`User ${socket.id} attempting to join room ${roomId} as player ${playerIndex}`);
@@ -466,7 +460,8 @@ io.on('connection', (socket) => {
                 turnStartTime: room.turnStartTime,
                 turnDuration: room.turnDuration,
                 turnCount: room.turnCount,
-                guesses: room.guesses
+                guesses: room.guesses,
+                playerNames: room.playerNames
             });
         } else {
             console.log(`Room ${roomId} does not exist for user ${socket.id}`);
@@ -475,7 +470,7 @@ io.on('connection', (socket) => {
 
     socket.on('add-point', (data) => {
         console.log(`Received add-point from ${socket.id}:`, data);
-        const roomId = data.roomId;
+        const roomId = data.roomId.toLowerCase();
         const x = parseFloat(data.x);
         const y = parseFloat(data.y);
         
@@ -541,7 +536,7 @@ io.on('connection', (socket) => {
 
     socket.on('remove-point', (data) => {
         console.log(`Received remove-point from ${socket.id}:`, data);
-        const roomId = data.roomId;
+        const roomId = data.roomId.toLowerCase();
         const removeData = { datasetIndex: data.datasetIndex, pointIndex: data.pointIndex, userId: socket.id };
         
         if (rooms.has(roomId)) {
@@ -653,7 +648,7 @@ io.on('connection', (socket) => {
     
     socket.on('submit-guess', (data) => {
         console.log(`Received guess from ${socket.id}:`, data);
-        const roomId = data.roomId;
+        const roomId = data.roomId.toLowerCase();
         const guess = parseFloat(data.guess);
         const playerIndex = data.playerIndex;
         
@@ -725,23 +720,119 @@ io.on('connection', (socket) => {
     
     // This listener is now effectively deprecated but harmless to keep for backward compatibility.
     socket.on('force-turn-switch', (data) => {
-        console.log(`[${data.roomId}] Received legacy 'force-turn-switch' from ${socket.id}. Server is authoritative.`);
+        console.log(`[${data.roomId.toLowerCase()}] Received legacy 'force-turn-switch' from ${socket.id}. Server is authoritative.`);
     });
     
     socket.on('end-game', (data) => {
-        const roomId = data.roomId;
+        const roomId = data.roomId.toLowerCase();
         if (rooms.has(roomId)) {
             calculateFinalScores(roomId);
         }
     });
     
+    socket.on('emoji-taunt', (data) => {
+        console.log(`Received emoji taunt from ${socket.id}:`, data);
+        const roomId = data.roomId.toLowerCase();
+        const emojiType = data.emojiType;
+        const playerIndex = data.playerIndex;
+        
+        // Validate emoji type
+        if (!['cry', 'laugh', 'angry'].includes(emojiType)) {
+            console.log(`Invalid emoji type received from ${socket.id}: ${emojiType}`);
+            return;
+        }
+        
+        if (rooms.has(roomId)) {
+            const room = rooms.get(roomId);
+            const userIndex = room.users.indexOf(socket.id);
+            
+            // Verify the user is in the room
+            if (userIndex === -1) {
+                console.log(`User ${socket.id} not found in room ${roomId}`);
+                return;
+            }
+            
+            console.log(`Broadcasting emoji taunt '${emojiType}' from player ${userIndex} in room ${roomId}`);
+            
+            // Broadcast emoji taunt to all users in the room
+            io.to(roomId).emit('emoji-taunt-received', {
+                emojiType: emojiType,
+                playerIndex: userIndex,
+                fromUserId: socket.id
+            });
+        } else {
+            console.log(`Room ${roomId} does not exist when sending emoji taunt`);
+        }
+    });
+
     // Add explicit leave-room handler for when users actually want to leave
     socket.on('leave-room', (roomId) => {
+        roomId = roomId.toLowerCase();
         console.log(`User ${socket.id} leaving room ${roomId}`);
         if (rooms.has(roomId)) {
             socket.to(roomId).emit('user-disconnected');
             rooms.delete(roomId);
             console.log(`Room ${roomId} deleted`);
+        }
+    });
+    
+    // Handle player name updates
+    socket.on('player-name', (data) => {
+        const roomId = data.roomId.toLowerCase();
+        const name = data.name;
+        const playerIndex = data.playerIndex;
+        
+        console.log(`Received player name from ${socket.id}: ${name} in room ${roomId}`);
+        
+        // Validate name
+        if (!name || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 20) {
+            console.log(`Invalid name received from ${socket.id}: ${name}`);
+            return;
+        }
+        
+        if (rooms.has(roomId)) {
+            const room = rooms.get(roomId);
+            const userIndex = room.users.indexOf(socket.id);
+            
+            // Verify the user is in the room
+            if (userIndex === -1) {
+                console.log(`User ${socket.id} not found in room ${roomId}`);
+                return;
+            }
+            
+            // Store the player name
+            room.playerNames[socket.id] = name.trim();
+            
+            console.log(`Stored player name '${name.trim()}' for user ${socket.id} in room ${roomId}`);
+            
+            // Broadcast the player name to all users in the room
+            io.to(roomId).emit('player-name-received', {
+                name: name.trim(),
+                playerIndex: userIndex,
+                fromUserId: socket.id
+            });
+            
+            // Check if both players have provided names and start timer if so
+            const bothPlayersHaveNames = room.users.every(userId => room.playerNames[userId]);
+            if (bothPlayersHaveNames && !room.gameStarted) {
+                room.gameStarted = true;
+                room.turnStartTime = Date.now();
+                
+                console.log(`Both players have names in room ${roomId}, starting game timer`);
+                
+                // Start the first turn timer
+                room.turnTimer = setTimeout(() => {
+                    switchTurn(roomId, true);
+                }, room.turnDuration + 500);
+                
+                // Notify clients that the game is starting with timer
+                io.to(roomId).emit('game-started', {
+                    turnStartTime: room.turnStartTime,
+                    turnDuration: room.turnDuration
+                });
+            }
+        } else {
+            console.log(`Room ${roomId} does not exist when setting player name`);
         }
     });
 });

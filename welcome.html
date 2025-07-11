@@ -528,6 +528,177 @@
             display: none;
         }
 
+        .user-info {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 12px 16px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            animation: slideInFromRight 0.5s ease-out;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .user-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        @keyframes slideInFromRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .user-info .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e2e8f0;
+        }
+
+        .user-info .user-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e293b;
+            margin: 0;
+        }
+        
+        /* Styles for Name Change Modal */
+        .name-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .name-modal {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.25),
+                0 0 0 1px rgba(255, 255, 255, 0.8);
+            animation: scaleIn 0.4s ease-out 0.1s both;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .name-modal h2 {
+            color: #1a1a1a;
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #000 0%, #4a5568 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .name-modal p {
+            color: #6b7280;
+            font-size: 1rem;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .name-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+            transition: all 0.2s ease;
+            background: #ffffff;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 24px;
+        }
+
+        .name-input:focus {
+            outline: none;
+            border-color: #64748b;
+            box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.15);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .modal-btn.primary {
+            background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-btn.primary:hover {
+            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-btn.secondary {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            color: #374151;
+            border: 2px solid #d1d5db;
+        }
+
+        .modal-btn.secondary:hover {
+            background: linear-gradient(135deg, #e2e8f0 0%, #d1d5db 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
         @media (max-width: 640px) {
             .container {
                 padding: 48px 32px;
@@ -613,6 +784,13 @@
             </div>
         </div>
     </div>
+
+    <!-- User Info Display -->
+    <div id="userInfo" class="user-info hidden">
+        <img id="userAvatar" src="assets/profile.png" alt="User Avatar" class="user-avatar">
+        <p id="userName" class="user-name"></p>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         // Interactive Statistical Background
@@ -813,6 +991,89 @@
         const statsCanvas = document.getElementById('statsCanvas');
         const background = new StatisticalBackground(statsCanvas);
 
+        // --- NEW: Name Change Modal Functionality ---
+        function showNameChangeModal() {
+            // Prevent multiple modals
+            if (document.querySelector('.name-modal-overlay')) return;
+
+            const currentName = localStorage.getItem('playerName') || '';
+
+            const overlay = document.createElement('div');
+            overlay.className = 'name-modal-overlay';
+            overlay.innerHTML = `
+                <div class="name-modal">
+                    <h2>Change UserName</h2>
+                    <p>It will be displayed in game.</p>
+                    <input type="text" id="nameChangeInput" class="name-input" placeholder="Enter your new name" value="${currentName}" maxlength="20" autocomplete="off">
+                    <div class="modal-actions">
+                        <button id="cancelNameChange" class="modal-btn secondary">Cancel</button>
+                        <button id="saveNameChange" class="modal-btn primary">Save</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+            const nameInput = document.getElementById('nameChangeInput');
+            nameInput.focus();
+            nameInput.select();
+
+            const saveBtn = document.getElementById('saveNameChange');
+            const cancelBtn = document.getElementById('cancelNameChange');
+
+            function closeModal() {
+                overlay.remove();
+            }
+            
+            function saveName() {
+                const newName = nameInput.value.trim();
+                if (newName.length < 2) {
+                    nameInput.style.borderColor = '#ef4444';
+                    nameInput.placeholder = 'Name must be at least 2 characters';
+                    return;
+                }
+                
+                localStorage.setItem('playerName', newName);
+                document.getElementById('userName').textContent = newName;
+                closeModal();
+            }
+
+            saveBtn.addEventListener('click', saveName);
+            cancelBtn.addEventListener('click', closeModal);
+            
+            nameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    saveName();
+                }
+            });
+
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    closeModal();
+                }
+            });
+        }
+
+        // --- MODIFIED: Check for existing username and display user info ---
+        function checkAndDisplayUserInfo() {
+            const playerName = localStorage.getItem('playerName');
+            const userInfoDiv = document.getElementById('userInfo');
+
+            // Clean up old listener to prevent duplicates
+            userInfoDiv.removeEventListener('click', showNameChangeModal);
+
+            if (playerName && playerName.trim().length > 0) {
+                document.getElementById('userName').textContent = playerName;
+                userInfoDiv.classList.remove('hidden');
+                // Add click listener to allow changing the name
+                userInfoDiv.addEventListener('click', showNameChangeModal);
+            } else {
+                userInfoDiv.classList.add('hidden');
+            }
+        }
+
+        // Call function on page load
+        checkAndDisplayUserInfo();
+
         // Original socket code
         const socket = io();
         const joinBtn = document.getElementById('joinBtn');
@@ -947,7 +1208,7 @@
             setTimeout(() => {
                 const initialDataParam = encodeURIComponent(JSON.stringify(roomData.initialData));
                 const playerIndex = roomData.playerIndex[socket.id];
-                window.location.href = `/game.html?room=${roomData.roomId}&initialData=${initialDataParam}&playerIndex=${playerIndex}&currentTurn=${roomData.currentTurn}&pointsInCurrentTurn=${roomData.pointsInCurrentTurn}&maxPointsPerTurn=${roomData.maxPointsPerTurn}&turnStartTime=${roomData.turnStartTime}&turnDuration=${roomData.turnDuration}`;
+                window.location.href = `/game.html?room=${roomData.roomId}&initialData=${initialDataParam}&playerIndex=${playerIndex}&currentTurn=${roomData.currentTurn}&pointsInCurrentTurn=${roomData.pointsInCurrentTurn}&maxPointsPerTurn=${roomData.maxPointsPerTurn}&turnDuration=${roomData.turnDuration}`;
             }, 1000);
         });
 

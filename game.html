@@ -16,7 +16,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -24,6 +24,7 @@
             margin: 0;
             position: relative;
             overflow-x: hidden;
+            box-sizing: border-box;
         }
 
         /* Interactive Statistical Background - Same as welcome page */
@@ -54,10 +55,13 @@
             padding: 32px;
             max-width: 920px;
             width: 100%;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
             border: 1px solid rgba(0,0,0,0.05);
             position: relative;
             z-index: 1;
             animation: slideIn 0.6s ease-out;
+            box-sizing: border-box;
         }
 
         @keyframes slideIn {
@@ -95,6 +99,210 @@
             font-weight: 400;
             margin: 4px 0;
             transition: color 0.3s ease;
+        }
+
+        /* Name input modal styles */
+        .name-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .name-modal {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.25),
+                0 0 0 1px rgba(255, 255, 255, 0.8);
+            animation: scaleIn 0.4s ease-out 0.1s both;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+        }
+
+        .name-modal h2 {
+            color: #1a1a1a;
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #000 0%, #4a5568 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .name-modal p {
+            color: #6b7280;
+            font-size: 1rem;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .name-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+            transition: all 0.2s ease;
+            background: #ffffff;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 24px;
+        }
+
+        .name-input:focus {
+            outline: none;
+            border-color: #64748b;
+            box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.15);
+        }
+
+        .name-input:hover {
+            border-color: #cbd5e1;
+        }
+
+        .name-submit-btn {
+            background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .name-submit-btn:hover {
+            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .name-submit-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* NEW: Wrapper for bottom-left UI elements */
+        .bottom-left-ui {
+            position: fixed;
+            bottom: 40px;
+            left: 40px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* Aligns items to the left of the cluster */
+            gap: 15px;
+        }
+
+        /* UPDATED: Player info sections */
+        .player-info {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            min-width: 200px;
+            text-align: center; /* Center h3 title */
+            position: relative; /* Enable absolute positioning for emoji displays */
+        }
+
+        .player-info:hover {
+            background: rgba(255, 255, 255, 0.95);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        /* .current-player is now positioned by its parent .bottom-left-ui */
+
+        .player-info.opponent-player {
+            position: fixed; /* Opponent card is still fixed independently */
+            top: 40px;
+            right: 40px;
+        }
+
+        .player-info h3 {
+            color: #374151;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* UPDATED: Player info content is now a vertical stack */
+        .player-info-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid #e5e7eb;
+            object-fit: cover;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .player-name {
+            color: #1f2937;
+            font-size: 1.1rem;
+            font-weight: 600;
+            /* flex: 1 is removed as it's not needed in a column layout */
+        }
+
+        .player-name.loading {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-left-ui {
+                bottom: 20px;
+                left: 20px;
+            }
+
+            .player-info {
+                min-width: 180px;
+                padding: 12px;
+            }
+
+            .player-info.opponent-player {
+                top: 20px;
+                right: 20px;
+            }
+            
+            .player-info-content {
+                gap: 6px;
+            }
+            
+            .player-avatar {
+                width: 40px;
+                height: 40px;
+            }
         }
 
         .chart-container {
@@ -703,6 +911,115 @@
             }
         }
 
+        /* UPDATED: Emoji Taunt Section */
+        .emoji-taunt-section {
+            /* margin-top removed, now positioned by parent */
+            padding: 16px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f4 100%);
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            width: 200px; /* Match min-width of player card */
+        }
+
+        .emoji-container {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .emoji-taunt {
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            padding: 4px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 2px solid transparent;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .emoji-taunt:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 1);
+            border-color: #667eea;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .emoji-taunt:active {
+            transform: scale(0.95);
+        }
+
+        .emoji-received {
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            opacity: 0;
+            transition: all 0.5s ease;
+            border: 2px dashed #e9ecef;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .emoji-received.show {
+            opacity: 1;
+            animation: emojiPop 2s ease-out;
+        }
+
+        .emoji-display {
+            position: absolute;
+            opacity: 0;
+            transition: all 0.5s ease;
+            z-index: 10;
+        }
+
+        .emoji-display.show {
+            opacity: 1;
+            animation: emojiPop 2s ease-out;
+        }
+
+        .emoji-next-to-name {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .current-player .emoji-display {
+            right: -72px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .opponent-player .emoji-display {
+            left: -72px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        @keyframes emojiPop {
+            0% {
+                transform: scale(0) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2) rotate(10deg);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
         /* Game Result Window */
         .game-result-overlay {
             position: fixed;
@@ -872,6 +1189,38 @@
     <div class="timer-bar-container" id="timerBarContainer">
         <div class="timer-bar" id="timerBar"></div>
     </div>
+    
+    <!-- NEW: Wrapper for bottom-left UI cluster -->
+    <div class="bottom-left-ui">
+        <!-- Emoji section moved here -->
+        <div class="emoji-taunt-section">
+            <div class="emoji-container">
+                <img src="assets/cry.png" alt="Cry" class="emoji-taunt" onclick="sendEmojiTaunt('cry')">
+                <img src="assets/laugh.png" alt="Laugh" class="emoji-taunt" onclick="sendEmojiTaunt('laugh')">
+                <img src="assets/angry.png" alt="Angry" class="emoji-taunt" onclick="sendEmojiTaunt('angry')">
+            </div>
+            <div class="emoji-received" id="emojiReceived" style="display: none;"></div>
+        </div>
+        <!-- Your player info card moved here -->
+        <div class="player-info current-player">
+            <h3>You</h3>
+            <div class="player-info-content">
+                <img src="assets/profile.png" alt="Your Avatar" class="player-avatar">
+                <div class="player-name" id="playerName">Loading...</div>
+                <div class="emoji-display" id="currentPlayerEmoji"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Opponent info remains in the top right -->
+    <div class="player-info opponent-player">
+        <h3>Opponent</h3>
+        <div class="player-info-content">
+            <div class="emoji-display" id="opponentEmoji"></div>
+            <img src="assets/profile.png" alt="Opponent Avatar" class="player-avatar">
+            <div class="player-name loading" id="opponentName">Waiting...</div>
+        </div>
+    </div>
 
     <div class="container">
         <div class="header">
@@ -893,6 +1242,8 @@
             </div>
             <div id="instructionText">Click anywhere on the plot to add points. Work with your partner to create interesting patterns!</div>
         </div>
+
+        <!-- Emoji section has been moved outside this container -->
 
         <div class="legend">
             <div class="legend-item">
@@ -1103,6 +1454,9 @@
         let turnTimer = null;
         let turnTimeLeft = 20; // 20 seconds per turn
         let timerDisplay = null;
+        let playerName = '';
+        let opponentName = '';
+        let gameStarted = false; // Track if the game has started (both players have names)
 
         // Notification system
         function showNotification(type, title, message, countdown = false) {
@@ -1453,11 +1807,17 @@
             const guessSection = document.getElementById('guessSection');
             if (gamePhase === 'guess' && isMyTurn && !hasSubmittedGuess) {
                 guessSection.style.display = 'block';
-                startTurnTimer(serverTurnStartTime, serverTurnDuration);
+                // Only start timer if game has started (both players have names)
+                if (gameStarted) {
+                    startTurnTimer(serverTurnStartTime, serverTurnDuration);
+                }
             } else {
                 guessSection.style.display = 'none';
                 if (isMyTurn && gamePhase === 'play') {
-                    startTurnTimer(serverTurnStartTime, serverTurnDuration);
+                    // Only start timer if game has started (both players have names)
+                    if (gameStarted) {
+                        startTurnTimer(serverTurnStartTime, serverTurnDuration);
+                    }
                 } else {
                     stopTurnTimer();
                 }
@@ -1513,6 +1873,66 @@
             updateStats();
         }
 
+        function showNameModal() {
+            const overlay = document.createElement('div');
+            overlay.className = 'name-modal-overlay';
+            overlay.innerHTML = `
+                <div class="name-modal">
+                    <h2>Welcome to R Arena!</h2>
+                    <p>Please enter your name to continue:</p>
+                    <input type="text" id="nameInput" class="name-input" placeholder="Enter your name" maxlength="20" autocomplete="off">
+                    <button id="nameSubmit" class="name-submit-btn">Continue</button>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            const nameInput = document.getElementById('nameInput');
+            const nameSubmit = document.getElementById('nameSubmit');
+            
+            // Focus on input
+            nameInput.focus();
+            
+            // Handle submit
+            const submitName = () => {
+                const name = nameInput.value.trim();
+                if (name.length < 2) {
+                    nameInput.style.borderColor = '#ef4444';
+                    nameInput.placeholder = 'Name must be at least 2 characters';
+                    return;
+                }
+                
+                // Save to localStorage
+                localStorage.setItem('playerName', name);
+                playerName = name;
+                
+                // Update UI
+                document.getElementById('playerName').textContent = name;
+                document.getElementById('playerName').classList.remove('loading');
+                
+                // Send to server
+                if (socket && socket.connected) {
+                    socket.emit('player-name', { roomId, name, playerIndex: myPlayerIndex });
+                }
+                
+                // Remove modal
+                overlay.remove();
+            };
+            
+            nameSubmit.addEventListener('click', submitName);
+            nameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitName();
+                }
+            });
+            
+            // Reset border color on input
+            nameInput.addEventListener('input', () => {
+                nameInput.style.borderColor = '#e2e8f0';
+                nameInput.placeholder = 'Enter your name';
+            });
+        }
+
         function initializeGame() {
             const urlParams = new URLSearchParams(window.location.search);
             roomId = urlParams.get('room');
@@ -1535,6 +1955,13 @@
 
             document.getElementById('roomId').textContent = roomId;
             document.getElementById('playerCount').textContent = '2';
+
+            // Initialize player name
+            playerName = localStorage.getItem('playerName') || '';
+            if (playerName) {
+                document.getElementById('playerName').textContent = playerName;
+                document.getElementById('playerName').classList.remove('loading');
+            }
 
             if (initialDataParam) {
                 try {
@@ -1560,6 +1987,14 @@
             socket = io();
             socket.on('connect', () => {
                 socket.emit('join-room', { roomId: roomId, playerIndex: myPlayerIndex });
+                
+                // Show name modal if no name is stored
+                if (!playerName) {
+                    showNameModal();
+                } else {
+                    // Send existing name to server
+                    socket.emit('player-name', { roomId, name: playerName, playerIndex: myPlayerIndex });
+                }
             });
 
             // Socket event handlers
@@ -1709,6 +2144,22 @@
                     }
                 }
                 
+                // Restore player names
+                if (stateData.playerNames) {
+                    Object.keys(stateData.playerNames).forEach(userId => {
+                        const name = stateData.playerNames[userId];
+                        if (userId === socket.id) {
+                            playerName = name;
+                            document.getElementById('playerName').textContent = name;
+                            document.getElementById('playerName').classList.remove('loading');
+                        } else {
+                            opponentName = name;
+                            document.getElementById('opponentName').textContent = name;
+                            document.getElementById('opponentName').classList.remove('loading');
+                        }
+                    });
+                }
+                
                 updateTurnDisplay(stateData.turnStartTime, stateData.turnDuration);
             });
 
@@ -1744,6 +2195,30 @@
                         hideNotification();
                     }, 3000);
                 }
+            });
+
+            socket.on('emoji-taunt-received', (data) => {
+                // Only display if the emoji is from the opponent (different player)
+                if (data.playerIndex !== myPlayerIndex) {
+                    displayReceivedEmoji(data.emojiType);
+                }
+            });
+            
+            socket.on('player-name-received', (data) => {
+                if (data.playerIndex !== myPlayerIndex) {
+                    // Update opponent name
+                    opponentName = data.name;
+                    document.getElementById('opponentName').textContent = data.name;
+                    document.getElementById('opponentName').classList.remove('loading');
+                }
+            });
+            
+            socket.on('game-started', (data) => {
+                gameStarted = true;
+                serverTurnStartTime = data.turnStartTime;
+                serverTurnDuration = data.turnDuration;
+                console.log('Game started! Both players have provided names. Timer starting...');
+                updateTurnDisplay(); // Refresh the display to start the timer
             });
         }
 
@@ -1869,6 +2344,71 @@
             document.getElementById('submitGuessBtn').disabled = true;
             // The updateTurnDisplay() call is removed from here. It will be triggered
             // by the 'turn-changed' event from the server.
+        }
+
+        function sendEmojiTaunt(emojiType) {
+            if (!socket || !roomId) {
+                console.log('No socket connection or room ID');
+                return;
+            }
+            
+            console.log(`Sending emoji taunt: ${emojiType}`);
+            socket.emit('emoji-taunt', {
+                roomId: roomId,
+                emojiType: emojiType,
+                playerIndex: myPlayerIndex
+            });
+            
+            // Display emoji next to current player's name (bottom left)
+            displaySentEmoji(emojiType);
+        }
+
+        function displaySentEmoji(emojiType) {
+            // Display emoji next to current player's name (bottom left)
+            const currentPlayerEmoji = document.getElementById('currentPlayerEmoji');
+            
+            let emojiImg = '';
+            if (emojiType === 'cry') {
+                emojiImg = '<img src="assets/cry.png" alt="Cry" class="emoji-next-to-name">';
+            } else if (emojiType === 'laugh') {
+                emojiImg = '<img src="assets/laugh.png" alt="Laugh" class="emoji-next-to-name">';
+            } else if (emojiType === 'angry') {
+                emojiImg = '<img src="assets/angry.png" alt="Angry" class="emoji-next-to-name">';
+            }
+            
+            currentPlayerEmoji.innerHTML = emojiImg;
+            currentPlayerEmoji.classList.add('show');
+            
+            setTimeout(() => {
+                currentPlayerEmoji.classList.remove('show');
+                setTimeout(() => {
+                    currentPlayerEmoji.innerHTML = '';
+                }, 500);
+            }, 3000);
+        }
+
+        function displayReceivedEmoji(emojiType) {
+            // Display emoji next to opponent's name (top right)
+            const opponentEmoji = document.getElementById('opponentEmoji');
+            
+            let emojiImg = '';
+            if (emojiType === 'cry') {
+                emojiImg = '<img src="assets/cry.png" alt="Cry" class="emoji-next-to-name">';
+            } else if (emojiType === 'laugh') {
+                emojiImg = '<img src="assets/laugh.png" alt="Laugh" class="emoji-next-to-name">';
+            } else if (emojiType === 'angry') {
+                emojiImg = '<img src="assets/angry.png" alt="Angry" class="emoji-next-to-name">';
+            }
+            
+            opponentEmoji.innerHTML = emojiImg;
+            opponentEmoji.classList.add('show');
+            
+            setTimeout(() => {
+                opponentEmoji.classList.remove('show');
+                setTimeout(() => {
+                    opponentEmoji.innerHTML = '';
+                }, 500);
+            }, 3000);
         }
 
         window.addEventListener('load', () => {
